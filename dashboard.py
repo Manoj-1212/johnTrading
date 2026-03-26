@@ -399,7 +399,7 @@ elif page == "🎯 Today's Signals":
             buy_data.append({
                 'Ticker': signal.get('ticker'),
                 'Price': f"${signal.get('price', 0):.2f}",
-                'Confidence': f"{signal.get('confidence', 0):.1f}%",
+                'Confidence': str(signal.get('confidence', 'MEDIUM')),
                 'Active Indicators': f"{signal.get('active_indicators', [])}",
                 'Strength': signal.get('signal_strength', 'Medium'),
             })
@@ -416,7 +416,7 @@ elif page == "🎯 Today's Signals":
             hold_data.append({
                 'Ticker': signal.get('ticker'),
                 'Price': f"${signal.get('price', 0):.2f}",
-                'Confidence': f"{signal.get('confidence', 0):.1f}%",
+                'Confidence': str(signal.get('confidence', 'MEDIUM')),
                 'Active Indicators': f"{signal.get('active_indicators', [])}",
                 'Reason': signal.get('reason', 'Monitoring'),
             })
@@ -433,7 +433,7 @@ elif page == "🎯 Today's Signals":
             sell_data.append({
                 'Ticker': signal.get('ticker'),
                 'Price': f"${signal.get('price', 0):.2f}",
-                'Confidence': f"{signal.get('confidence', 0):.1f}%",
+                'Confidence': str(signal.get('confidence', 'MEDIUM')),
                 'Active Indicators': f"{signal.get('active_indicators', [])}",
                 'Reason': signal.get('reason', 'Sell condition triggered'),
             })
