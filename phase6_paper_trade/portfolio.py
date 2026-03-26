@@ -24,7 +24,7 @@ class PaperPortfolio:
     def _ensure_dir(self):
         os.makedirs(os.path.dirname(self.SAVE_PATH), exist_ok=True)
     
-    def open_position(self, ticker: str, price: float, date: str) -> bool:
+    def open_position(self, ticker: str, price: float, date: str, current_prices: dict = None) -> bool:
         """
         Open a new position.
         
@@ -36,6 +36,8 @@ class PaperPortfolio:
             Entry price
         date : str
             Entry date
+        current_prices : dict, optional
+            Current prices for all tickers (for portfolio value calculation)
         
         Returns
         -------
@@ -59,14 +61,15 @@ class PaperPortfolio:
         self.positions[ticker] = {
             'shares': shares,
             'entry_price': price,
-            'entry_date': date
+            'entry_date': date,
+            'current_price': price
         }
         self.cash -= alloc
-        self._save()
+        self._save(current_prices)
         print(f"[BUY] {ticker} @ ${price:.2f} | {shares:.2f} shares | Alloc: ${alloc:.0f}")
         return True
     
-    def close_position(self, ticker: str, price: float, date: str) -> float:
+    def close_position(self, ticker: str, price: float, date: str, current_prices: dict = None) -> float:
         """
         Close an existing position.
         
@@ -78,6 +81,8 @@ class PaperPortfolio:
             Exit price
         date : str
             Exit date
+        current_prices : dict, optional
+            Current prices for all tickers (for portfolio value calculation)
         
         Returns
         -------
@@ -101,10 +106,12 @@ class PaperPortfolio:
             'exit_date': date,
             'entry_price': pos['entry_price'],
             'exit_price': price,
+            'shares': pos['shares'],
+            'pnl': round(pnl, 2),
             'pnl_pct': round(pnl_pct, 2)
         })
         
-        self._save()
+        self._save(current_prices)
         print(f"[SELL] {ticker} @ ${price:.2f} | PnL: {pnl_pct:+.2f}%")
         return pnl_pct
     
@@ -126,14 +133,32 @@ class PaperPortfolio:
             'trades_closed': len(self.trade_history)
         }
     
-    def _save(self):
+    def _save(self, current_prices: dict = None):
         """Save portfolio to JSON."""
+        from datetime import datetime
         self._ensure_dir()
+        
+        # Calculate current portfolio value
+        if current_prices is None:
+            current_prices = {}
+        
+        position_value = 0
+        for ticker, pos in self.positions.items():
+            current_price = current_prices.get(ticker, pos.get('current_price', pos['entry_price']))
+            position_value += pos['shares'] * current_price
+        
+        total_value = self.cash + position_value
+        
         with open(self.SAVE_PATH, 'w') as f:
             json.dump({
-                'cash': self.cash,
+                'initial_capital': PAPER_CAPITAL,
+                'cash': round(self.cash, 2),
+                'total_value': round(total_value, 2),
                 'positions': self.positions,
-                'trade_history': self.trade_history
+                'closed_trades': self.trade_history,
+                'trade_history': self.trade_history,  # Keep both names for compatibility
+                'last_update': datetime.now().isoformat(),
+                'timestamp': datetime.now().isoformat()
             }, f, indent=2)
     
     def _load(self):

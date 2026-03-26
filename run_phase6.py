@@ -96,13 +96,13 @@ def main():
         
         # EXECUTE BUY SIGNALS
         if signal['action'] == 'BUY' and ticker not in portfolio.positions:
-            result = portfolio.open_position(ticker, current_price, today_date)
+            result = portfolio.open_position(ticker, current_price, today_date, current_prices)
             if result:
                 executions.append(('BUY', ticker, current_price, "✅ EXECUTED"))
         
         # EXECUTE SELL SIGNALS
         elif signal['action'] == 'SELL' and ticker in portfolio.positions:
-            pnl_pct = portfolio.close_position(ticker, current_price, today_date)
+            pnl_pct = portfolio.close_position(ticker, current_price, today_date, current_prices)
             executions.append(('SELL', ticker, current_price, f"✅ EXECUTED ({pnl_pct:+.1f}%)"))
     
     # Display executions
