@@ -4,6 +4,9 @@ Generate current trading signals for all tickers
 """
 
 import pandas as pd
+import json
+from datetime import datetime
+from pathlib import Path
 from phase1_data.downloader import StockDownloader
 from phase4_signals.signal_generator import SignalGenerator
 from config import TICKERS
@@ -31,14 +34,66 @@ def main():
         signal = SignalGenerator.generate(data[ticker], ticker)
         signals.append(signal)
     
-    # Step 3: Display signals organized by action
-    print("\n" + "="*100)
-    print("TODAY'S TRADING SIGNALS")
-    print("="*100)
-    
+    # Organize signals by type
     buy_signals = [s for s in signals if s['action'] == 'BUY']
     hold_signals = [s for s in signals if s['action'] == 'HOLD']
     sell_signals = [s for s in signals if s['action'] == 'SELL']
+    
+    # Step 2.5: Save signals to JSON for dashboard
+    print("[STEP 3] Saving signals to JSON for dashboard...")
+    signals_json = {
+        'timestamp': datetime.now().isoformat(),
+        'date': str(datetime.now().date()),
+        'total_signals': len(signals),
+        'buy': [
+            {
+                'ticker': s['ticker'],
+                'price': s['price'],
+                'signal_count': s['signal_count'],
+                'confidence': s['confidence'],
+                'active_indicators': s['signals_active'],
+                'signal_strength': 'Strong' if s['signal_count'] >= 6 else 'Medium' if s['signal_count'] >= 4 else 'Weak'
+            }
+            for s in buy_signals
+        ],
+        'hold': [
+            {
+                'ticker': s['ticker'],
+                'price': s['price'],
+                'signal_count': s['signal_count'],
+                'confidence': s['confidence'],
+                'active_indicators': s['signals_active'],
+                'reason': f"Mixed signals ({s['signal_count']}/7 active)"
+            }
+            for s in hold_signals
+        ],
+        'sell': [
+            {
+                'ticker': s['ticker'],
+                'price': s['price'],
+                'signal_count': s['signal_count'],
+                'confidence': s['confidence'],
+                'active_indicators': s['signals_active'],
+                'reason': 'Sell condition triggered' if s['signal_count'] <= 2 else 'Below threshold'
+            }
+            for s in sell_signals
+        ],
+        'all_signals': signals
+    }
+    
+    # Create phase4_signals directory if it doesn't exist
+    Path("phase4_signals").mkdir(exist_ok=True)
+    
+    # Save to JSON
+    with open("phase4_signals/latest_signals.json", "w") as f:
+        json.dump(signals_json, f, indent=2)
+    
+    print("   ✓ Signals saved to phase4_signals/latest_signals.json")
+    
+    # Step 4: Display signals organized by action
+    print("\n" + "="*100)
+    print("TODAY'S TRADING SIGNALS")
+    print("="*100)
     
     # BUY SIGNALS
     if buy_signals:
@@ -95,7 +150,7 @@ def main():
     print("\n" + summary_df.to_string(index=False))
     
     print("\n" + "="*100)
-    print("✅ Phase 4 complete! Signals updated\n")
+    print("✅ Phase 4 complete! Signals updated and saved to JSON\n")
     print("="*100 + "\n")
     
     return True
