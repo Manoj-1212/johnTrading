@@ -1,0 +1,47 @@
+[Unit]
+Description=John Trading System - Algorithmic Trading Bot
+After=network.target
+Documentation=https://github.com/Manoj-1212/johnTrading
+
+[Service]
+# Service type
+Type=simple
+
+# User and group
+User=ubuntu
+Group=ubuntu
+
+# Working directory
+WorkingDirectory=/home/ubuntu/johntrading
+
+# Environment variables
+Environment="PATH=/home/ubuntu/johntrading/.venv/bin"
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONPATH=/home/ubuntu/johntrading"
+
+# Main process - Run full pipeline
+ExecStart=/home/ubuntu/johntrading/.venv/bin/python /home/ubuntu/johntrading/run_all.py
+
+# Restart policy
+Restart=on-failure
+RestartSec=300
+
+# Restart limits (stop restarting if fails 3 times in 60 seconds)
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Logging
+StandardOutput=append:/home/ubuntu/johntrading/logs/trading.log
+StandardError=append:/home/ubuntu/johntrading/logs/errors.log
+
+# Process management
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+# Resource limits (optional)
+MemoryLimit=4G
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
