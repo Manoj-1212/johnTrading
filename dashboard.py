@@ -249,21 +249,26 @@ if page == "📈 Overview":
     
     # Open positions
     st.subheader("📍 Current Positions")
-    positions = portfolio.get('positions', [])
+    positions = portfolio.get('positions', {})
     if positions:
         pos_data = []
-        for pos in positions:
-            pnl = (pos.get('current_price', 0) - pos.get('entry_price', 0)) * pos.get('shares', 0)
-            pnl_pct = (pnl / (pos.get('entry_price', 0) * pos.get('shares', 0)) * 100) if pos.get('entry_price', 0) > 0 else 0
+        # Positions is a dict: {ticker: {shares, entry_price, entry_date, ...}}
+        for ticker, pos in positions.items():
+            entry_price = float(pos.get('entry_price', 0))
+            shares = float(pos.get('shares', 0))
+            current_price = float(pos.get('current_price', entry_price))  # Use entry_price as fallback
+            
+            pnl = (current_price - entry_price) * shares
+            pnl_pct = (pnl / (entry_price * shares) * 100) if entry_price > 0 else 0
             
             pos_data.append({
-                'Ticker': pos.get('ticker'),
-                'Entry Price': f"${pos.get('entry_price', 0):.2f}",
-                'Current Price': f"${pos.get('current_price', 0):.2f}",
-                'Shares': pos.get('shares'),
-                'Position Value': f"${pos.get('current_price', 0) * pos.get('shares', 0):.2f}",
+                'Ticker': ticker,
+                'Entry Price': f"${entry_price:.2f}",
+                'Current Price': f"${current_price:.2f}",
+                'Shares': f"{shares:.2f}",
+                'Position Value': f"${current_price * shares:.2f}",
                 'P&L': f"${pnl:.2f}",
-                'P&L %': f"{pnl_pct:.2f}%",
+                'P&L %': f"{pnl_pct:+.2f}%",
                 'Entry Date': pos.get('entry_date', 'N/A')
             })
         
@@ -303,14 +308,16 @@ elif page == "💼 Portfolio":
     
     # Position breakdown
     st.subheader("Position Breakdown by Sector")
-    positions = portfolio.get('positions', [])
+    positions = portfolio.get('positions', {})
     
     if positions:
         # Create sector summary
         sector_data = {}
-        for pos in positions:
+        for ticker, pos in positions.items():
             sector = pos.get('sector', 'Unknown')
-            value = pos.get('current_price', 0) * pos.get('shares', 0)
+            current_price = float(pos.get('current_price', pos.get('entry_price', 0)))
+            shares = float(pos.get('shares', 0))
+            value = current_price * shares
             if sector not in sector_data:
                 sector_data[sector] = 0
             sector_data[sector] += value
@@ -330,19 +337,23 @@ elif page == "💼 Portfolio":
     st.subheader("All Positions")
     if positions:
         pos_data = []
-        for pos in positions:
-            pnl = (pos.get('current_price', 0) - pos.get('entry_price', 0)) * pos.get('shares', 0)
-            pnl_pct = (pnl / (pos.get('entry_price', 0) * pos.get('shares', 0)) * 100) if pos.get('entry_price', 0) > 0 else 0
+        for ticker, pos in positions.items():
+            entry_price = float(pos.get('entry_price', 0))
+            shares = float(pos.get('shares', 0))
+            current_price = float(pos.get('current_price', entry_price))
+            
+            pnl = (current_price - entry_price) * shares
+            pnl_pct = (pnl / (entry_price * shares) * 100) if entry_price > 0 else 0
             
             pos_data.append({
-                'Ticker': pos.get('ticker'),
+                'Ticker': ticker,
                 'Sector': pos.get('sector', 'N/A'),
-                'Shares': int(pos.get('shares', 0)),
-                'Entry Price': f"${pos.get('entry_price', 0):.2f}",
-                'Current Price': f"${pos.get('current_price', 0):.2f}",
-                'Position Value': f"${pos.get('current_price', 0) * pos.get('shares', 0):.2f}",
+                'Shares': f"{shares:.2f}",
+                'Entry Price': f"${entry_price:.2f}",
+                'Current Price': f"${current_price:.2f}",
+                'Position Value': f"${current_price * shares:.2f}",
                 'Unrealized P&L': f"${pnl:.2f}",
-                'Return %': f"{pnl_pct:.2f}%",
+                'Return %': f"{pnl_pct:+.2f}%",
                 'Entry Date': pos.get('entry_date', 'N/A'),
                 'Days Held': pos.get('days_held', 0)
             })
