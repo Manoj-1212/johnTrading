@@ -79,11 +79,42 @@ def main():
     else:
         print(f"\n📝 No closed trades yet")
     
-    # Generate current signals
+    # Generate current signals and EXECUTE TRADES
     print("\n" + "="*100)
-    print("TODAY'S SIGNALS - RECOMMENDED ACTIONS")
+    print("TODAY'S SIGNALS - EXECUTING TRADES")
     print("="*100)
     
+    today_date = str(pd.Timestamp.now().date())
+    executions = []
+    
+    for ticker in TICKERS:
+        if ticker not in data or data[ticker].empty:
+            continue
+        
+        signal = SignalGenerator.generate(data[ticker], ticker)
+        current_price = float(data[ticker]['Close'].iloc[-1])
+        
+        # EXECUTE BUY SIGNALS
+        if signal['action'] == 'BUY' and ticker not in portfolio.positions:
+            result = portfolio.open_position(ticker, current_price, today_date)
+            if result:
+                executions.append(('BUY', ticker, current_price, "✅ EXECUTED"))
+        
+        # EXECUTE SELL SIGNALS
+        elif signal['action'] == 'SELL' and ticker in portfolio.positions:
+            pnl_pct = portfolio.close_position(ticker, current_price, today_date)
+            executions.append(('SELL', ticker, current_price, f"✅ EXECUTED ({pnl_pct:+.1f}%)"))
+    
+    # Display executions
+    if executions:
+        print(f"\n📊 TRADES EXECUTED ({len(executions)}):")
+        for action, ticker, price, status in executions:
+            emoji = "🟢" if action == "BUY" else "🔴"
+            print(f"   {emoji} {action} {ticker} @ ${price:.2f} | {status}")
+    else:
+        print(f"\n📊 TRADES EXECUTED: None")
+    
+    # Show any pending open signals
     buy_signals = []
     for ticker in TICKERS:
         if ticker not in data or data[ticker].empty:
@@ -94,15 +125,13 @@ def main():
             buy_signals.append((ticker, signal['signal_count'], signal['price']))
     
     if buy_signals:
-        print(f"\n🟢 OPEN SIGNALS ({len(buy_signals)}):")
+        print(f"\n🟢 OPEN SIGNALS (Monitoring - no new positions yet) ({len(buy_signals)}):")
         for ticker, sig_count, price in sorted(buy_signals, key=lambda x: x[1], reverse=True):
             print(f"   • {ticker} @ ${price:.2f} ({sig_count} signals)")
-    else:
-        print(f"\n🟢 OPEN SIGNALS: None")
     
     print("\n" + "="*100)
     print("✅ Phase 6 complete!")
-    print("   Paper portfolio tracking active\n")
+    print("   Trades executed | Portfolio updated\n")
     print("="*100 + "\n")
     
     return True
