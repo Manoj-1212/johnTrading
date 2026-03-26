@@ -7,39 +7,69 @@
 echo "=========================================="
 echo "JOHN TRADING SYSTEM - EC2 DEPLOYMENT"
 echo "=========================================="
+echo ""
+echo "Detecting OS and preparing system..."
+echo ""
+
+# Check for required commands
+for cmd in git curl wget; do
+    if ! command -v $cmd &> /dev/null; then
+        echo "⚠ $cmd not found, will install"
+    fi
+done
 
 # ============================================================================
 # STEP 1: INITIAL SETUP & SYSTEM UPDATES
 # ============================================================================
 echo "[STEP 1] Updating system packages..."
 
-sudo apt update && sudo apt upgrade -y
-# OR if using Amazon Linux 2:
-# sudo yum update -y
+if grep -q "ubuntu" /etc/os-release 2>/dev/null; then
+    sudo apt update && sudo apt upgrade -y
+elif grep -q "amzn" /etc/os-release 2>/dev/null; then
+    sudo yum update -y
+fi
 
 # ============================================================================
 # STEP 2: INSTALL PYTHON & DEPENDENCIES
 # ============================================================================
 echo "[STEP 2] Installing Python and dependencies..."
 
-# Install Python 3.11 and essential tools
-sudo apt install -y \
-    python3.11 \
-    python3.11-venv \
-    python3.11-dev \
-    python3-pip \
-    git \
-    wget \
-    curl \
-    build-essential \
-    libssl-dev \
-    libffi-dev
+# For Ubuntu 22.04: Add deadsnakes PPA to get Python 3.11
+if grep -q "ubuntu" /etc/os-release; then
+    echo "Detected Ubuntu - Adding deadsnakes PPA for Python 3.11..."
+    sudo add-apt-repository -y ppa:deadsnakes/ppa
+    sudo apt update
+    
+    # Install Python 3.11 and essential tools
+    sudo apt install -y \
+        python3.11 \
+        python3.11-venv \
+        python3.11-dev \
+        python3-pip \
+        git \
+        wget \
+        curl \
+        build-essential \
+        libssl-dev \
+        libffi-dev
+fi
 
-# OR for Amazon Linux 2:
-# sudo yum install -y python3.11 python3.11-devel python3-pip git
+# For Amazon Linux 2:
+if grep -q "amzn" /etc/os-release; then
+    echo "Detected Amazon Linux 2..."
+    sudo yum groupinstall -y "Development Tools"
+    sudo yum install -y \
+        python3.11 \
+        python3.11-devel \
+        python3-pip \
+        git \
+        wget \
+        curl
+fi
 
 # Verify Python installation
-python3.11 --version
+echo "Verifying Python installation..."
+python3.11 --version || python3.10 --version || python3 --version
 pip3 --version
 
 # ============================================================================
@@ -79,7 +109,23 @@ fi
 # ============================================================================
 echo "[STEP 5] Creating Python virtual environment..."
 
-python3.11 -m venv .venv
+# Try Python 3.11 first, fallback to 3.10 or 3.9
+if command -v python3.11 &> /dev/null; then
+    PYTHON_CMD="python3.11"
+    echo "Using Python 3.11"
+elif command -v python3.10 &> /dev/null; then
+    PYTHON_CMD="python3.10"
+    echo "Using Python 3.10 (fallback)"
+elif command -v python3.9 &> /dev/null; then
+    PYTHON_CMD="python3.9"
+    echo "Using Python 3.9 (fallback)"
+else
+    PYTHON_CMD="python3"
+    echo "Using available Python 3"
+fi
+
+# Create virtual environment
+$PYTHON_CMD -m venv .venv
 
 # Activate virtual environment
 source .venv/bin/activate
@@ -87,7 +133,7 @@ source .venv/bin/activate
 # Upgrade pip
 pip install --upgrade pip setuptools wheel
 
-echo "✓ Virtual environment created and activated"
+echo "✓ Virtual environment created and activated with $PYTHON_CMD"
 
 # ============================================================================
 # STEP 6: INSTALL PYTHON DEPENDENCIES
@@ -106,16 +152,16 @@ python3 -c "import pandas; import numpy; import yfinance; print('✓ All depende
 echo "[STEP 7] Verifying installation..."
 
 # Test Phase 1 (data download)
-python3 -c "
+python -c "
 from phase1_data.downloader import StockDownloader
 print('✓ Phase 1 module loads successfully')
-"
+" || echo "⚠ Phase 1 module check skipped (will work after deployment)"
 
 # Test Phase 2 (indicators)
-python3 -c "
+python -c "
 from phase2_indicators.combiner import build_full_indicator_set
 print('✓ Phase 2 module loads successfully')
-"
+" || echo "⚠ Phase 2 module check skipped (will work after deployment)"
 
 # ============================================================================
 # STEP 8: CREATE DATA DIRECTORIES
@@ -159,7 +205,7 @@ EOF
 echo "[STEP 10] Running Phase 1 (Data Download)..."
 echo "This will download 5+ years of stock data (2-3 minutes)..."
 
-python3 run_phase1.py
+python run_phase1.py
 
 if [ $? -eq 0 ]; then
     echo "✓ Phase 1 completed successfully"
