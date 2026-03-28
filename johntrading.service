@@ -1,47 +1,53 @@
 [Unit]
-Description=John Trading System - Algorithmic Trading Bot
-After=network.target
+Description=John Trading System - Automated 24/7 Real-Time Trading
 Documentation=https://github.com/Manoj-1212/johnTrading
+After=network-online.target
+Wants=network-online.target
+
+# Restart policy - restarts if fails too many times
+StartLimitIntervalSec=3600
+StartLimitBurst=5
 
 [Service]
-# Service type
 Type=simple
-
-# User and group
 User=ubuntu
-Group=ubuntu
-
-# Working directory
 WorkingDirectory=/home/ubuntu/johntrading
 
-# Environment variables
-Environment="PATH=/home/ubuntu/johntrading/.venv/bin"
+# Load API keys and configuration from .env file
+EnvironmentFile=/home/ubuntu/johntrading/.env
+
+# Python environment setup
+Environment="PATH=/home/ubuntu/johntrading/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PYTHONUNBUFFERED=1"
 Environment="PYTHONPATH=/home/ubuntu/johntrading"
+Environment="TRADING_MODE=paper"
 
-# Main process - Run full pipeline
-ExecStart=/home/ubuntu/johntrading/.venv/bin/python /home/ubuntu/johntrading/run_all.py
+# Main process - Automated 24/7 trading (exits at market close, restarts via cron/systemd)
+ExecStart=/home/ubuntu/johntrading/.venv/bin/python /home/ubuntu/johntrading/run_phase9_production.py
 
-# Restart policy
-Restart=on-failure
-RestartSec=300
+# Restart behavior
+Restart=always
+RestartSec=30
 
-# Restart limits (stop restarting if fails 3 times in 60 seconds)
-StartLimitIntervalSec=60
-StartLimitBurst=3
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%
 
-# Logging
-StandardOutput=append:/home/ubuntu/johntrading/logs/trading.log
-StandardError=append:/home/ubuntu/johntrading/logs/errors.log
+# Logging to systemd journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=johntrading
 
 # Process management
-KillMode=process
-KillSignal=SIGTERM
-TimeoutStopSec=10
+KillMode=mixed
+TimeoutStopSec=30
 
-# Resource limits (optional)
-MemoryLimit=4G
-CPUQuota=50%
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/home/ubuntu/johntrading
 
 [Install]
 WantedBy=multi-user.target

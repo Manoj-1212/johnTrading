@@ -1,0 +1,43 @@
+[Unit]
+Description=John Trading System - Real-Time Automated Trading
+After=network.target
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/johntrading
+Environment="PATH=/home/ubuntu/johntrading/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EnvironmentFile=/home/ubuntu/johntrading/.env
+
+# Load environment variables from .env file
+ExecStart=/home/ubuntu/johntrading/.venv/bin/python /home/ubuntu/johntrading/run_phase9.py
+
+# Auto-restart on failure
+Restart=always
+RestartSec=60
+
+# Don't restart if it exited cleanly
+RestartForceExitStatus=0
+RestartPreventExitStatus=
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Standard output/error handling
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=johntrading
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=80%
+
+# Graceful shutdown
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
