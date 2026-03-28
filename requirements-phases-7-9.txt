@@ -1,0 +1,20 @@
+# Phase 7-9 Requirements
+# Real-time intraday trading system
+
+# Existing requirements (from earlier phases)
+pandas==2.0.3
+numpy==1.26.4
+yfinance==0.2.40
+scipy==1.12.0
+plotly==5.18.0
+streamlit==1.32.2
+
+# New requirements for Phases 7-9
+alpaca-py==0.26.0        # Alpaca broker API for live trading
+python-dateutil==2.8.2   # Date utilities
+pytz==2024.1             # Timezone support
+
+# Optional but recommended
+schedule==1.2.0          # Job scheduling for daily tasks
+python-dotenv==1.0.0     # Environment variable management
+requests==2.31.0         # HTTP requests for monitoring
