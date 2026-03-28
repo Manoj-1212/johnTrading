@@ -45,6 +45,41 @@ if [ ! -f "$PROJECT_DIR/.env" ]; then
     exit 1
 else
     echo "   ✓ .env file found"
+    
+    # Validate and fix .env format for systemd
+    echo "   Validating .env format for systemd compatibility..."
+    
+    # Check if .env has invalid shell syntax (export, $(), etc.)
+    if grep -q "^export " "$PROJECT_DIR/.env" || grep -q '\$(' "$PROJECT_DIR/.env"; then
+        echo "   ⚠️  .env has shell syntax (export, \$(), etc.) - systemd doesn't support this"
+        echo "   Automatically fixing .env format..."
+        
+        # Remove 'export ' from beginning of lines
+        sed -i 's/^export //' "$PROJECT_DIR/.env"
+        
+        # Remove comment lines that have shell syntax
+        sed -i '/^#.*\$()/d' "$PROJECT_DIR/.env"
+        
+        echo "   ✓ .env format fixed (removed 'export' keywords)"
+    fi
+    
+    # Check if required API keys are present
+    if ! grep -q "APCA_API_KEY_ID=" "$PROJECT_DIR/.env" || ! grep -q "APCA_API_SECRET_KEY=" "$PROJECT_DIR/.env"; then
+        echo "   ⚠️  WARNING: Required Alpaca API credentials not found in .env"
+        echo "   Please add to $PROJECT_DIR/.env:"
+        echo "      APCA_API_KEY_ID=your_key_id"
+        echo "      APCA_API_SECRET_KEY=your_secret_key"
+        echo "   Then run this script again"
+        exit 1
+    fi
+    
+    # Add APCA_API_BASE_URL if not present
+    if ! grep -q "APCA_API_BASE_URL=" "$PROJECT_DIR/.env"; then
+        echo "   Adding default APCA_API_BASE_URL (paper trading)..."
+        echo "APCA_API_BASE_URL=https://paper-api.alpaca.markets" >> "$PROJECT_DIR/.env"
+    fi
+    
+    echo "   ✓ .env file validated and compatible with systemd"
 fi
 
 # Check if Python 3 is available

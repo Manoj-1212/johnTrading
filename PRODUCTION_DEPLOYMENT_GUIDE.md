@@ -296,6 +296,67 @@ for p in positions:
 
 ## Troubleshooting
 
+### Ignoring invalid environment assignment (.env format issue)
+
+**Error in logs:**
+```
+Ignoring invalid environment assignment 'export INSTANCE_TYPE=...'
+Ignoring invalid environment assignment 'export DEPLOYMENT_DATE=$(...)'
+```
+
+**Cause:** Your `.env` file has shell syntax (`export`, `$(command)`) which systemd doesn't support
+
+**Fix:**
+```bash
+# Check your .env for invalid syntax
+cat ~/.env
+
+# If you see 'export' at the beginning of lines, remove it:
+sed -i 's/^export //' ~/.env
+
+# Verify the file now has only KEY=VALUE format:
+cat ~/.env
+# Should show (no 'export'):
+# APCA_API_KEY_ID=xxx
+# APCA_API_SECRET_KEY=xxx
+# APCA_API_BASE_URL=https://...
+
+# Reload systemd
+sudo systemctl daemon-reload
+sudo systemctl restart johntrading
+```
+
+**Note:** systemd's EnvironmentFile only supports `KEY=VALUE` format - NOT shell commands or variable interpolation.
+
+### TradingClient() got an unexpected keyword argument 'base_url'
+
+**Error in logs:**
+```
+Error connecting to Alpaca: TradingClient.__init__() got an unexpected keyword argument 'base_url'
+ERROR: Broker not connected!
+```
+
+**Cause:** Code was using outdated alpaca-py API parameter
+
+**Fix:**
+```bash
+# Pull latest code (includes fix)
+cd ~/johntrading
+git pull origin master
+
+# Reinstall alpaca-py (latest version)
+source .venv/bin/activate
+pip install --upgrade alpaca-py
+
+# Reload systemd
+sudo systemctl daemon-reload
+sudo systemctl restart johntrading
+
+# Verify connection
+journalctl -u johntrading -f
+# Should show: "Connected to Alpaca (PAPER TRADING)"
+```
+
 ### Service won't start
 
 **Check status:**
@@ -310,7 +371,7 @@ journalctl -u johntrading -n 50
 
 **Common issues:**
 - `.env` file missing → Create it with your API keys
-- Broker not connected → Check API keys in `.env`
+- Broker not connected → Check API keys in `.env` and fix format
 - Python not found → Verify `.venv` exists and has correct permissions
 - Permission denied → Run `sudo chown -R ubuntu:ubuntu ~/johntrading`
 

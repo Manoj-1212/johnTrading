@@ -71,25 +71,26 @@ class AlpacaBrokerInterface:
         if not api_key or not secret_key:
             raise ValueError(
                 "Alpaca API credentials not found. Set environment variables:\n"
-                "  export APCA_API_KEY_ID='your_key'\n"
-                "  export APCA_API_SECRET_KEY='your_secret'"
+                "  APCA_API_KEY_ID='your_key'\n"
+                "  APCA_API_SECRET_KEY='your_secret'"
             )
         
-        # Set API base URL
+        # Set API base URL via environment variable (alpaca-py will read it automatically)
         if paper_trading:
-            base_url = "https://paper-api.alpaca.markets"
+            api_base_url = "https://paper-api.alpaca.markets"
             mode = "PAPER TRADING"
         else:
-            base_url = "https://api.alpaca.markets"
+            api_base_url = "https://api.alpaca.markets"
             mode = "LIVE TRADING"
+        
+        # Set environment variable if not already set
+        if not os.getenv('APCA_API_BASE_URL'):
+            os.environ['APCA_API_BASE_URL'] = api_base_url
         
         try:
             # Initialize Alpaca trading client
-            self.client = TradingClient(
-                api_key=api_key,
-                secret_key=secret_key,
-                base_url=base_url
-            )
+            # Note: TradingClient reads APCA_API_BASE_URL, APCA_API_KEY_ID, APCA_API_SECRET_KEY from environment
+            self.client = TradingClient(api_key, secret_key)
             
             # Verify connection by getting account
             self.account = self.client.get_account()

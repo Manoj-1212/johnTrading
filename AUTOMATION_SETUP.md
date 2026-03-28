@@ -9,6 +9,41 @@
 
 ---
 
+## ⚠️ IMPORTANT: .env File Format
+
+**systemd requires a specific format for the .env file.**
+
+### Correct Format (systemd compatible):
+```
+APCA_API_KEY_ID=your_key
+APCA_API_SECRET_KEY=your_secret
+APCA_API_BASE_URL=https://paper-api.alpaca.markets
+MIN_SIGNALS=5
+```
+
+### ❌ WRONG Format (shell syntax, NOT supported by systemd):
+```bash
+export APCA_API_KEY_ID="your_key"         # ❌ Don't use 'export'
+export DEPLOYMENT_DATE=$(date)             # ❌ Don't use $()
+export INSTANCE_TYPE="m7i-flex.large"     # ❌ Command substitution fails
+```
+
+### Fix if needed:
+```bash
+# Check your .env format
+cat ~/.env
+
+# If you see 'export', fix it:
+sed -i 's/^export //' ~/.env
+
+# Verify (should show KEY=VALUE, no 'export'):
+cat ~/.env
+```
+
+The deployment script will automatically fix this, but check to be sure!
+
+---
+
 ## Quick Setup (10 minutes)
 
 ### Step 1: SSH to Your Server
