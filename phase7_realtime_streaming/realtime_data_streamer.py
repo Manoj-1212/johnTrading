@@ -81,87 +81,148 @@ class RealtimeDataStreamer:
         """
         Download daily data to establish baseline and previous day's close.
         Used for initial indicator warm-up.
+        
+        Downloads each ticker individually with retry logic to avoid yfinance API failures.
         """
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Downloading daily data baseline...")
         
-        try:
-            # Get 6 months of daily data for indicators warm-up
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=180)
+        # Get 6 months of daily data for indicators warm-up
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=180)
+        
+        failed_tickers = []
+        successful_tickers = []
+        
+        # Download each ticker individually with retry logic
+        for i, ticker in enumerate(tickers):
+            max_retries = 3
+            retry_count = 0
+            success = False
             
-            data = yf.download(
-                ' '.join(tickers),
-                start=start_date,
-                end=end_date,
-                interval='1d',
-                progress=False,
-                threads=True
-            )
+            while retry_count < max_retries and not success:
+                try:
+                    if self.debug:
+                        print(f"  [{i+1}/{len(tickers)}] Downloading {ticker}...")
+                    
+                    # Download daily data for this ticker
+                    data = yf.download(
+                        ticker,
+                        start=start_date,
+                        end=end_date,
+                        interval='1d',
+                        progress=False
+                    )
+                    
+                    # Verify we got valid data
+                    if data is not None and not data.empty and len(data) > 10:
+                        # Ensure we have required columns
+                        required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+                        if all(col in data.columns for col in required_cols):
+                            self.tickers_data[ticker] = data[required_cols]
+                            successful_tickers.append(ticker)
+                            success = True
+                            if self.debug:
+                                print(f"  ✓ {ticker}: {len(data)} bars")
+                        else:
+                            raise ValueError(f"Missing required columns for {ticker}")
+                    else:
+                        raise ValueError(f"Empty or insufficient data for {ticker}")
+                        
+                except Exception as e:
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        # Wait before retry (exponential backoff)
+                        wait_time = 2 ** retry_count  # 2s, 4s, 8s
+                        if self.debug:
+                            print(f"  ⚠ {ticker} failed (attempt {retry_count}/{max_retries}): {str(e)[:100]}")
+                            print(f"    Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                    else:
+                        # All retries exhausted
+                        failed_tickers.append(ticker)
+                        print(f"✗ Failed to download {ticker} after {max_retries} attempts")
             
-            # Handle single ticker case
-            if len(tickers) == 1:
-                data = data[['Open', 'High', 'Low', 'Close', 'Volume']]
-                self.tickers_data[tickers[0]] = data
-            else:
-                # Multi-ticker: data has MultiIndex columns
-                for ticker in tickers:
-                    if ticker in data.columns.get_level_values('Ticker'):
-                        ticker_data = data.loc[:, (slice(None), ticker)]
-                        ticker_data.columns = ticker_data.columns.droplevel()
-                        self.tickers_data[ticker] = ticker_data
-            
-            if self.debug:
-                print(f"Downloaded daily data: {len(data)} bars")
-            
-            return self.tickers_data
-            
-        except Exception as e:
-            print(f"Error downloading daily data: {e}")
-            return {}
+            # Small delay between requests to avoid rate limiting
+            if i < len(tickers) - 1:
+                time.sleep(0.5)
+        
+        # Summary
+        print(f"\n✓ Downloaded daily data for {len(successful_tickers)}/{len(tickers)} tickers")
+        if failed_tickers:
+            print(f"✗ Failed: {failed_tickers}")
+            print(f"  Note: System will continue with available tickers. Monitor logs for failures.")
+        
+        return self.tickers_data
     
     def get_1min_bars_today(self, ticker, num_bars=200):
         """
         Get 1-minute bars from today's session up to current time.
         Returns latest num_bars bars for indicator calculation.
+        
+        Uses cache when available, with retry logic for API failures.
         """
-        try:
-            # Check cache first
-            cache_file = self.cache_dir / f"{ticker}_1min_{datetime.now().strftime('%Y%m%d')}.csv"
-            
-            if cache_file.exists():
+        # Check cache first
+        cache_file = self.cache_dir / f"{ticker}_1min_{datetime.now().strftime('%Y%m%d')}.csv"
+        
+        if cache_file.exists():
+            try:
                 cached_df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+                if len(cached_df) > 0:
+                    if self.debug:
+                        print(f"[{datetime.now().strftime('%H:%M:%S')}] Loaded {ticker} from cache: {len(cached_df)} bars")
+                    return cached_df.tail(num_bars)
+            except Exception as e:
                 if self.debug:
-                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Loaded {ticker} from cache: {len(cached_df)} bars")
-                return cached_df.tail(num_bars)
-            
-            # Download today's 1-minute bars
-            now = datetime.now()
-            # Start from market open or 1 hour ago, whichever is earlier
-            market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
-            start_time = max(market_open - timedelta(hours=1), market_open)
-            
-            data = yf.download(
-                ticker,
-                start=now.date(),
-                interval='1m',
-                progress=False
-            )
-            
-            if data.empty:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] No data for {ticker}")
-                return pd.DataFrame()
-            
-            # Cache the data
-            data.to_csv(cache_file)
-            
-            if self.debug:
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] Downloaded {ticker}: {len(data)} bars")
-            
-            return data.tail(num_bars)
-            
-        except Exception as e:
-            print(f"Error downloading 1-min bars for {ticker}: {e}")
-            return pd.DataFrame()
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Cache read error for {ticker}: {e}")
+        
+        # Download today's 1-minute bars with retry logic
+        now = datetime.now()
+        max_retries = 2
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                data = yf.download(
+                    ticker,
+                    start=now.date(),
+                    interval='1m',
+                    progress=False
+                )
+                
+                if data is not None and not data.empty:
+                    # Verify data has required columns
+                    required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+                    if all(col in data.columns for col in required_cols):
+                        # Cache the data
+                        try:
+                            data.to_csv(cache_file)
+                        except Exception as cache_err:
+                            if self.debug:
+                                print(f"  Cache write error for {ticker}: {cache_err}")
+                        
+                        if self.debug:
+                            print(f"[{datetime.now().strftime('%H:%M:%S')}] Downloaded {ticker}: {len(data)} bars")
+                        
+                        return data.tail(num_bars)
+                    else:
+                        raise ValueError(f"Missing required columns for {ticker}")
+                else:
+                    # Empty data - maybe market hasn't started today
+                    if self.debug:
+                        print(f"[{datetime.now().strftime('%H:%M:%S')}] No 1-min data yet for {ticker}")
+                    return pd.DataFrame()
+                    
+            except Exception as e:
+                retry_count += 1
+                if retry_count < max_retries:
+                    wait_time = 2 ** retry_count
+                    if self.debug:
+                        print(f"  ⚠ {ticker} 1-min download failed (attempt {retry_count}/{max_retries}): {str(e)[:80]}")
+                        print(f"    Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"✗ Failed to get 1-min bars for {ticker} after {max_retries} attempts")
+                    return pd.DataFrame()
     
     def stream_live(self, tickers, update_interval_seconds=60, duration_minutes=390):
         """
