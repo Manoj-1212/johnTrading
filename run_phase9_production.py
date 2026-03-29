@@ -26,10 +26,11 @@ from phase9_risk_management.risk_manager import RiskManager, PortfolioMonitor
 try:
     from trading_new_config import TICKERS, PAPER_CAPITAL
 except ImportError:
+    # Valid S&P 500 tickers (removed CUDA, BRK.B - not valid for yfinance)
     TICKERS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA',
                'JPM', 'JNJ', 'XOM', 'WMT', 'PG',
-               'META', 'TSLA', 'CUDA', 'AMD', 'INTC',
-               'BA', 'GS', 'BRK.B', 'NFLX', 'ADBE']
+               'META', 'TSLA', 'GE', 'AMD', 'INTC',
+               'BA', 'GS', 'V', 'NFLX', 'ADBE']
     PAPER_CAPITAL = 10000
 
 # ============================================================================
