@@ -47,6 +47,29 @@ st.markdown("""
 st.title("🚀 Real-Time Trading Dashboard — Phases 7-9")
 st.caption("Live monitoring of automated 24/7 trading system")
 
+# ⚠️ IMPORTANT: This dashboard shows SAMPLE/MOCK data outside market hours
+# During market hours (9:30 AM - 4 PM EST weekdays), real data displays here
+import pytz
+from datetime import datetime
+
+EST = pytz.timezone('US/Eastern')
+now_est = datetime.now(EST)
+is_market_hours = (
+    now_est.weekday() < 5 and  # Monday-Friday
+    now_est.hour >= 9 and
+    (now_est.hour < 16 or (now_est.hour == 16 and now_est.minute < 1))
+)
+
+if not is_market_hours:
+    st.warning(
+        f"⏰ **Market Closed** - Showing sample/mock data. "
+        f"Real data displays during 9:30 AM - 4:00 PM EST (Mon-Fri). "
+        f"Current time: {now_est.strftime('%I:%M %p %Z')}"
+    )
+else:
+    st.success(f"✅ **Market Hours** - Showing REAL data. {now_est.strftime('%I:%M %p %Z')}")
+
+
 # ============================================================================
 # SIDEBAR: Market Status & Quick Info
 # ============================================================================
@@ -97,6 +120,26 @@ with st.sidebar:
     **Daily Loss Limit**: -2%
     
     **Min Signals**: 5/7
+    """)
+    
+    st.divider()
+    st.subheader("🔧 Diagnostics")
+    
+    # Trading execution status
+    st.info("""
+    **⚠️ Trades Not Executing?**
+    
+    Code checks logs:
+    ```
+    journalctl -u johntrading | grep -i "trade"
+    ```
+    
+    **Common Issues**:
+    - ✅ BUY signals need 5+ of 7 indicators
+    - ✅ VIX check (stops if VIX > 50)
+    - ✅ Daily loss limit (-2%)
+    - ✅ Broker connection (check "Connecting")
+    - ✅ Capital available (min $500 per trade)
     """)
 
 # ============================================================================
