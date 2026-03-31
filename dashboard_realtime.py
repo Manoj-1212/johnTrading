@@ -88,7 +88,7 @@ with st.sidebar:
     st.divider()
     st.subheader("📋 Configuration")
     st.info("""
-    **Active Tickers**: 20 (CUDA, BRK.B removed)
+    **Active Tickers**: 21 (CUDA→GE, BRK.B→V, +PLTR)
     
     **Paper Capital**: $10,000
     
@@ -151,14 +151,14 @@ with tab1:
     
     signal_data = {
         'Ticker': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'JPM', 'JNJ', 'XOM', 'WMT', 'PG',
-                   'META', 'TSLA', 'GE', 'AMD', 'INTC', 'BA', 'GS', 'V', 'NFLX', 'ADBE'],
+                   'META', 'TSLA', 'GE', 'AMD', 'INTC', 'BA', 'GS', 'V', 'NFLX', 'ADBE', 'PLTR'],
         'Signal': ['🟢 BUY', '🟡 HOLD', '🟢 BUY', '🔴 SELL', '🟡 HOLD', '🔴 SELL', '🟡 HOLD', '🔴 SELL', '🟡 HOLD', '🔴 SELL',
-                   '🔴 SELL', '🟡 HOLD', '🔴 SELL', '🟡 HOLD', '🔴 SELL', '🟡 HOLD', '🔴 SELL', '🟢 BUY', '🔴 SELL', '🟡 HOLD'],
+                   '🔴 SELL', '🟡 HOLD', '🔴 SELL', '🟡 HOLD', '🔴 SELL', '🟡 HOLD', '🔴 SELL', '🟢 BUY', '🔴 SELL', '🟡 HOLD', '🟢 BUY'],
         'Active Signals': [6, 5, 5, 2, 4, 3, 4, 2, 5, 2,
-                          3, 5, 2, 4, 1, 5, 3, 6, 2, 4],
+                          3, 5, 2, 4, 1, 5, 3, 6, 2, 4, 5],
         'Confidence': ['HIGH', 'MEDIUM', 'MEDIUM', 'LOW', 'MEDIUM', 'LOW', 'MEDIUM', 'LOW', 'MEDIUM', 'LOW',
-                       'LOW', 'MEDIUM', 'LOW', 'MEDIUM', 'LOW', 'MEDIUM', 'LOW', 'HIGH', 'LOW', 'MEDIUM'],
-        'Last Update': [(datetime.now() - timedelta(minutes=i)).strftime('%H:%M:%S') for i in range(20)]
+                       'LOW', 'MEDIUM', 'LOW', 'MEDIUM', 'LOW', 'MEDIUM', 'LOW', 'HIGH', 'LOW', 'MEDIUM', 'HIGH'],
+        'Last Update': [(datetime.now() - timedelta(minutes=i)).strftime('%H:%M:%S') for i in range(21)]
     }
     
     df_signals = pd.DataFrame(signal_data)
