@@ -59,7 +59,8 @@ class RealtimeIndicatorCalculator:
             # Volume Indicator
             volume_ma20 = self._sma(bars_df['Volume'], 20)
             current_volume = bars_df['Volume'].iloc[-1]
-            volume_ratio = current_volume / volume_ma20 if volume_ma20 > 0 else 1
+            # Use scalar comparison, not Series comparison
+            volume_ratio = current_volume / volume_ma20 if float(volume_ma20) > 0 else 1
             
             # Price Levels
             current_price = bars_df['Close'].iloc[-1]
@@ -121,8 +122,9 @@ class RealtimeIndicatorCalculator:
     def _sma(self, series, period):
         """Simple Moving Average"""
         if len(series) < period:
-            return series.mean()
-        return series.rolling(window=period).mean().iloc[-1]
+            return float(series.mean())  # Ensure scalar
+        rolling_mean = series.rolling(window=period).mean()
+        return float(rolling_mean.iloc[-1])  # Extract scalar value
     
     def _rsi(self, series, period=14):
         """Relative Strength Index"""
@@ -133,10 +135,18 @@ class RealtimeIndicatorCalculator:
         gains = (deltas.where(deltas > 0, 0)).rolling(window=period).mean()
         losses = (-deltas.where(deltas < 0, 0)).rolling(window=period).mean()
         
-        rs = gains / losses
+        # Extract scalar values to avoid Series comparison issues
+        gains_val = float(gains.iloc[-1])
+        losses_val = float(losses.iloc[-1])
+        
+        # Avoid division by zero
+        if losses_val == 0 or gains_val == 0:
+            return 50
+        
+        rs = gains_val / losses_val
         rsi = 100 - (100 / (1 + rs))
         
-        return rsi.iloc[-1]
+        return float(rsi)
     
     def _rsi_level(self, rsi):
         """Interpret RSI value"""
