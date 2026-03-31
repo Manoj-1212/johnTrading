@@ -100,6 +100,9 @@ class RiskManager:
             (can_execute: bool, reason: str)
         """
         
+        # Ensure current_price is a scalar float
+        current_price = float(current_price.item()) if hasattr(current_price, 'item') else float(current_price)
+        
         warnings = []
         
         # Check 1: Market regime (VIX)
@@ -129,7 +132,7 @@ class RiskManager:
             return False, f"Sector concentration limit ({sector}: {sector_exposure:.2%})"
         
         # Check 5: Buying power
-        cash = self.broker.account.cash if self.broker.account else 0
+        cash = float(self.broker.account.cash) if self.broker.account else 0.0
         if position_value > cash:
             return False, f"Insufficient buying power (${position_value:.2f} > ${cash:.2f})"
         
