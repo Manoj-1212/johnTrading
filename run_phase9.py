@@ -228,17 +228,20 @@ class ProductionTradingSystem:
         action = signal['action']
         
         if action == 'BUY':
+            # Convert current_price to float
+            current_price_float = float(current_price.item()) if hasattr(current_price, 'item') else float(current_price)
+            
             # Calculate position size (ensure cash is numeric)
             qty = self.risk_manager.calculate_position_size(
                 ticker,
-                float(current_price.item()) if hasattr(current_price, 'item') else float(current_price),
+                current_price_float,
                 float(self.broker.account.cash),
                 atr=indicators.get('atr', 0)
             )
             
             # Check if buy is allowed
             allowed, reason = self.risk_manager.can_execute_buy(
-                ticker, qty, current_price, atr=indicators.get('atr', 0)
+                ticker, qty, current_price_float, atr=indicators.get('atr', 0)
             )
             
             return {
