@@ -30,7 +30,7 @@ except ImportError:
     TICKERS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA',
                'JPM', 'JNJ', 'XOM', 'WMT', 'PG',
                'META', 'TSLA', 'GE', 'AMD', 'INTC',
-               'BA', 'GS', 'V', 'NFLX', 'ADBE']
+               'BA', 'GS', 'V', 'NFLX', 'ADBE', 'PLTR']
     PAPER_CAPITAL = 10000
 
 # ============================================================================
