@@ -424,28 +424,40 @@ class PortfolioMonitor:
             alerts = []
             
             for position in positions:
-                ticker = position.symbol
-                current_price = float(position.current_price)
-                entry_price = float(position.avg_fill_price)
-                pnl_pct = (float(position.unrealized_plpc) * 100) if position.unrealized_plpc else 0
+                try:
+                    ticker = position.symbol
+                    current_price = float(position.current_price)
+                    
+                    # Safely get entry price - try different attribute names
+                    entry_price = (
+                        float(getattr(position, 'avg_fill_price', 0)) or
+                        float(getattr(position, 'average_fill_price', 0)) or
+                        float(getattr(position, 'entry_price', current_price))
+                    )
+                    
+                    pnl_pct = (float(position.unrealized_plpc) * 100) if position.unrealized_plpc else 0
+                    
+                    # Stop loss check (1.5%)
+                    if pnl_pct < -1.5:
+                        alerts.append({
+                            'type': 'STOP_LOSS',
+                            'ticker': ticker,
+                            'pnl_pct': pnl_pct,
+                            'message': f"{ticker} hit stop loss (P&L: {pnl_pct:.1f}%)"
+                        })
+                    
+                    # Take profit check (2%)
+                    if pnl_pct > 2.0:
+                        alerts.append({
+                            'type': 'TAKE_PROFIT',
+                            'ticker': ticker,
+                            'pnl_pct': pnl_pct,
+                            'message': f"{ticker} hit take profit target (P&L: {pnl_pct:.1f}%)"
+                        })
                 
-                # Stop loss check (1.5%)
-                if pnl_pct < -1.5:
-                    alerts.append({
-                        'type': 'STOP_LOSS',
-                        'ticker': ticker,
-                        'pnl_pct': pnl_pct,
-                        'message': f"{ticker} hit stop loss (P&L: {pnl_pct:.1f}%)"
-                    })
-                
-                # Take profit check (2%)
-                if pnl_pct > 2.0:
-                    alerts.append({
-                        'type': 'TAKE_PROFIT',
-                        'ticker': ticker,
-                        'pnl_pct': pnl_pct,
-                        'message': f"{ticker} hit take profit target (P&L: {pnl_pct:.1f}%)"
-                    })
+                except (AttributeError, ValueError) as e:
+                    # Skip positions with missing attributes
+                    continue
             
             self.alerts.extend(alerts)
             return alerts

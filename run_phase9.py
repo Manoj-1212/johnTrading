@@ -302,6 +302,15 @@ class ProductionTradingSystem:
                 
                 if order:
                     position = self.broker.get_position(ticker)
+                    # Safely get entry price from position
+                    entry_price = price_float
+                    if position:
+                        entry_price = (
+                            float(getattr(position, 'avg_fill_price', price_float)) or
+                            float(getattr(position, 'average_fill_price', price_float)) or
+                            price_float
+                        )
+                    
                     execution = {
                         'timestamp': timestamp,
                         'action': 'SELL',
@@ -310,7 +319,7 @@ class ProductionTradingSystem:
                         'price': price_float,
                         'order_id': order.id,
                         'status': str(order.status),
-                        'entry_price': float(position.avg_fill_price) if position else price_float,
+                        'entry_price': entry_price,
                     }
                     return execution
         
