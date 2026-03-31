@@ -274,11 +274,14 @@ class ProductionTradingSystem:
         if qty < 1:
             return None
         
+        # Ensure current_price is a scalar float for formatting
+        price_float = float(current_price.item()) if hasattr(current_price, 'item') else float(current_price)
+        
         timestamp = datetime.now()
         
         try:
             if action == 'BUY':
-                print(f"[{timestamp.strftime('%H:%M:%S')}] 📈 BUY: {qty} shares of {ticker} @ ${current_price:.2f}")
+                print(f"[{timestamp.strftime('%H:%M:%S')}] 📈 BUY: {qty} shares of {ticker} @ ${price_float:.2f}")
                 order = self.broker.place_buy_order(ticker, qty, order_type='market')
                 
                 if order:
@@ -287,14 +290,14 @@ class ProductionTradingSystem:
                         'action': 'BUY',
                         'ticker': ticker,
                         'quantity': qty,
-                        'price': current_price,
+                        'price': price_float,
                         'order_id': order.id,
                         'status': str(order.status),
                     }
                     return execution
             
             elif action == 'SELL':
-                print(f"[{timestamp.strftime('%H:%M:%S')}] 📉 SELL: {qty} shares of {ticker} @ ${current_price:.2f}")
+                print(f"[{timestamp.strftime('%H:%M:%S')}] 📉 SELL: {qty} shares of {ticker} @ ${price_float:.2f}")
                 order = self.broker.place_sell_order(ticker, qty, order_type='market')
                 
                 if order:
@@ -304,10 +307,10 @@ class ProductionTradingSystem:
                         'action': 'SELL',
                         'ticker': ticker,
                         'quantity': qty,
-                        'price': current_price,
+                        'price': price_float,
                         'order_id': order.id,
                         'status': str(order.status),
-                        'entry_price': float(position.avg_fill_price) if position else current_price,
+                        'entry_price': float(position.avg_fill_price) if position else price_float,
                     }
                     return execution
         
