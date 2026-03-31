@@ -108,22 +108,22 @@ class RiskManager:
             return False, f"Market in extreme volatility (VIX={vix:.1f} > {self.max_vix_for_trading})"
         
         # Check 2: Daily loss limit
-        daily_pnl = self.portfolio_value - self.initial_portfolio_value
-        daily_loss_pct = abs(daily_pnl) / self.initial_portfolio_value if daily_pnl < 0 else 0
+        daily_pnl = float(self.portfolio_value) - float(self.initial_portfolio_value)
+        daily_loss_pct = abs(daily_pnl) / float(self.initial_portfolio_value) if daily_pnl < 0 else 0
         
         if daily_loss_pct > self.daily_loss_limit_pct:
             return False, f"Daily loss limit reached ({daily_loss_pct:.2%} > {self.daily_loss_limit_pct:.2%})"
         
         # Check 3: Position size limit
         position_value = quantity * current_price
-        position_pct = position_value / self.portfolio_value
+        position_pct = float(position_value / self.portfolio_value)  # Ensure scalar
         
         if position_pct > self.max_position_size_pct:
             return False, f"Position too large ({position_pct:.2%} > {self.max_position_size_pct:.2%})"
         
         # Check 4: Sector concentration
         sector = self.sector_map.get(ticker, 'OTHER')
-        sector_exposure = self._calculate_sector_exposure(ticker, quantity, current_price)
+        sector_exposure = float(self._calculate_sector_exposure(ticker, quantity, current_price))  # Ensure scalar
         
         if sector_exposure > self.max_sector_concentration_pct:
             return False, f"Sector concentration limit ({sector}: {sector_exposure:.2%})"

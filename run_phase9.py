@@ -231,7 +231,7 @@ class ProductionTradingSystem:
             # Calculate position size (ensure cash is numeric)
             qty = self.risk_manager.calculate_position_size(
                 ticker,
-                float(current_price),
+                float(current_price.item()) if hasattr(current_price, 'item') else float(current_price),
                 float(self.broker.account.cash),
                 atr=indicators.get('atr', 0)
             )
