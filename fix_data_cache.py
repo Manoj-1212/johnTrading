@@ -56,13 +56,18 @@ for i, ticker in enumerate(TICKERS, 1):
             print(f" ✗ (no data)")
             failed.append(ticker)
         else:
-            # Ensure proper format
+            # Ensure proper format and numeric types
             data.index = pd.to_datetime(data.index)
             data = data[['Open', 'High', 'Low', 'Close', 'Volume']]
             
-            # Save to cache
+            # Explicitly convert to float to ensure numeric types
+            for col in ['Open', 'High', 'Low', 'Close']:
+                data[col] = pd.to_numeric(data[col], errors='coerce')
+            data['Volume'] = pd.to_numeric(data['Volume'], errors='coerce', downcast='integer')
+            
+            # Save to cache with proper format
             cache_file = cache_dir / f'{ticker}.csv'
-            data.to_csv(cache_file)
+            data.to_csv(cache_file, float_format='%.2f')  # Save with 2 decimal places
             print(f" ✓ ({len(data)} bars)")
             successful += 1
             

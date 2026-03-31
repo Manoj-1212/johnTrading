@@ -166,8 +166,12 @@ class RealtimeDataStreamer:
         
         if cache_file.exists():
             try:
-                # Read CSV without explicit date parsing (to avoid pandas warnings)
-                cached_df = pd.read_csv(cache_file, index_col=0)
+                # Read CSV and convert columns to numeric
+                cached_df = pd.read_csv(
+                    cache_file, 
+                    index_col=0,
+                    dtype={'Open': float, 'High': float, 'Low': float, 'Close': float, 'Volume': float}
+                )
                 
                 # Ensure index is datetime
                 cached_df.index = pd.to_datetime(cached_df.index, errors='coerce')
