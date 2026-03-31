@@ -337,7 +337,7 @@ class ProductionTradingSystem:
             'ticker': execution['ticker'],
             'quantity': execution['quantity'],
             'price': execution['price'],
-            'order_id': execution['order_id'],
+            'order_id': str(execution['order_id']),
         })
     
     def _log_risk_event(self, ticker, signal, risk_check):

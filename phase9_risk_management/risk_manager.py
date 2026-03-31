@@ -285,7 +285,7 @@ class RiskManager:
         
         try:
             vix_data = yf.download('^VIX', period='1d', progress=False)
-            vix = float(vix_data['Close'].iloc[-1])
+            vix = vix_data['Close'].iloc[-1].item()
             
             self.vix_cache = vix
             self.vix_last_update = now
