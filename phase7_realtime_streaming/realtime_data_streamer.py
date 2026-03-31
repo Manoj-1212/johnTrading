@@ -166,15 +166,11 @@ class RealtimeDataStreamer:
         
         if cache_file.exists():
             try:
-                # Read CSV with explicit date format handling
-                # CSV index is saved as first column in ISO 8601 format (YYYY-MM-DD HH:MM:SS)
-                cached_df = pd.read_csv(
-                    cache_file, 
-                    index_col=0
-                )
+                # Read CSV without explicit date parsing (to avoid pandas warnings)
+                cached_df = pd.read_csv(cache_file, index_col=0)
                 
-                # Convert index to datetime explicitly
-                cached_df.index = pd.to_datetime(cached_df.index, format='%Y-%m-%d %H:%M:%S', errors='coerce')
+                # Ensure index is datetime
+                cached_df.index = pd.to_datetime(cached_df.index, errors='coerce')
                 
                 # Remove any rows with NaT index (failed parsing)
                 cached_df = cached_df[cached_df.index.notna()]

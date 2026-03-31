@@ -59,8 +59,10 @@ class RealtimeIndicatorCalculator:
             # Volume Indicator
             volume_ma20 = self._sma(bars_df['Volume'], 20)
             current_volume = bars_df['Volume'].iloc[-1]
-            # Use scalar comparison, not Series comparison
-            volume_ratio = current_volume / volume_ma20 if float(volume_ma20) > 0 else 1
+            # Ensure scalar comparison
+            volume_ma20_scalar = float(volume_ma20) if not isinstance(volume_ma20, (int, float)) else volume_ma20
+            current_volume_scalar = float(current_volume) if not isinstance(current_volume, (int, float)) else current_volume
+            volume_ratio = current_volume_scalar / volume_ma20_scalar if volume_ma20_scalar > 0 else 1
             
             # Price Levels
             current_price = bars_df['Close'].iloc[-1]
@@ -76,9 +78,9 @@ class RealtimeIndicatorCalculator:
                 'current_price': current_price,
                 
                 # Trend
-                'ema50': ema50,
-                'ema200': ema200,
-                'ema_trend': 'UPTREND' if ema50 > ema200 else 'DOWNTREND',
+                'ema50': float(ema50),
+                'ema200': float(ema200),
+                'ema_trend': 'UPTREND' if float(ema50) > float(ema200) else 'DOWNTREND',
                 
                 # Momentum
                 'rsi': rsi14,
@@ -93,7 +95,7 @@ class RealtimeIndicatorCalculator:
                 'bb_middle': bb_middle,
                 'bb_lower': bb_lower,
                 'atr': atr14,
-                'atr_percent': (atr14 / current_price * 100) if current_price > 0 else 0,
+                'atr_percent': (atr14 / float(current_price) * 100) if float(current_price) > 0 else 0,
                 
                 # Volume
                 'volume_ratio': volume_ratio,
@@ -116,15 +118,19 @@ class RealtimeIndicatorCalculator:
     def _ema(self, series, period):
         """Exponential Moving Average"""
         if len(series) < period:
-            return series.iloc[-1]
-        return series.ewm(span=period, adjust=False).mean().iloc[-1]
+            val = series.iloc[-1]
+            return val.item() if hasattr(val, 'item') else float(val)
+        ema_result = series.ewm(span=period, adjust=False).mean()
+        val = ema_result.iloc[-1]
+        return val.item() if hasattr(val, 'item') else float(val)
     
     def _sma(self, series, period):
         """Simple Moving Average"""
         if len(series) < period:
-            return float(series.mean())  # Ensure scalar
+            return series.mean().item() if hasattr(series.mean(), 'item') else float(series.mean())
         rolling_mean = series.rolling(window=period).mean()
-        return float(rolling_mean.iloc[-1])  # Extract scalar value
+        val = rolling_mean.iloc[-1]
+        return val.item() if hasattr(val, 'item') else float(val)
     
     def _rsi(self, series, period=14):
         """Relative Strength Index"""
@@ -135,9 +141,9 @@ class RealtimeIndicatorCalculator:
         gains = (deltas.where(deltas > 0, 0)).rolling(window=period).mean()
         losses = (-deltas.where(deltas < 0, 0)).rolling(window=period).mean()
         
-        # Extract scalar values to avoid Series comparison issues
-        gains_val = float(gains.iloc[-1])
-        losses_val = float(losses.iloc[-1])
+        # Extract scalar values using .item() to avoid Series comparison issues
+        gains_val = gains.iloc[-1].item() if hasattr(gains.iloc[-1], 'item') else float(gains.iloc[-1])
+        losses_val = losses.iloc[-1].item() if hasattr(losses.iloc[-1], 'item') else float(losses.iloc[-1])
         
         # Avoid division by zero
         if losses_val == 0 or gains_val == 0:
@@ -169,13 +175,18 @@ class RealtimeIndicatorCalculator:
         signal_line = macd_line.ewm(span=9, adjust=False).mean()
         macd_hist = macd_line - signal_line
         
-        return macd_line.iloc[-1], signal_line.iloc[-1], macd_hist.iloc[-1]
+        # Explicitly convert to float
+        return float(macd_line.iloc[-1]), float(signal_line.iloc[-1]), float(macd_hist.iloc[-1])
     
     def _macd_signal_direction(self, macd_line, signal_line):
         """MACD crossover direction"""
-        if macd_line > signal_line:
+        # Convert to scalars explicitly
+        macd_val = float(macd_line)
+        signal_val = float(signal_line)
+        
+        if macd_val > signal_val:
             return 'BULLISH'
-        elif macd_line < signal_line:
+        elif macd_val < signal_val:
             return 'BEARISH'
         else:
             return 'NEUTRAL'
@@ -183,7 +194,8 @@ class RealtimeIndicatorCalculator:
     def _bollinger_bands(self, series, period=20):
         """Bollinger Bands"""
         if len(series) < period:
-            return series.iloc[-1], series.iloc[-1], series.iloc[-1]
+            val = float(series.iloc[-1])
+            return val, val, val
         
         sma = series.rolling(window=period).mean()
         std = series.rolling(window=period).std()
@@ -191,7 +203,12 @@ class RealtimeIndicatorCalculator:
         upper = sma + (std * 2)
         lower = sma - (std * 2)
         
-        return upper.iloc[-1], sma.iloc[-1], lower.iloc[-1]
+        # Explicitly convert to float
+        upper_val = float(upper.iloc[-1])
+        sma_val = float(sma.iloc[-1])
+        lower_val = float(lower.iloc[-1])
+        
+        return upper_val, sma_val, lower_val
     
     def _atr(self, bars_df, period=14):
         """Average True Range"""
@@ -206,7 +223,8 @@ class RealtimeIndicatorCalculator:
         tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
         atr = tr.rolling(window=period).mean()
         
-        return atr.iloc[-1]
+        atr_val = atr.iloc[-1]
+        return float(atr_val) if atr_val is not None else 0
     
     def _elliott_wave_value(self, bars_df):
         """Simplified Elliott Wave momentum indicator"""
