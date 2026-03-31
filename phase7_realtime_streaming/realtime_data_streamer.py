@@ -166,14 +166,25 @@ class RealtimeDataStreamer:
         
         if cache_file.exists():
             try:
-                cached_df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+                # Try reading with explicit date parsing
+                cached_df = pd.read_csv(
+                    cache_file, 
+                    index_col=0, 
+                    parse_dates=True,
+                    infer_datetime_format=True
+                )
+                
+                # Ensure index is datetime
+                if not isinstance(cached_df.index, pd.DatetimeIndex):
+                    cached_df.index = pd.to_datetime(cached_df.index)
+                
                 if len(cached_df) > 0:
                     if self.debug:
                         print(f"[{datetime.now().strftime('%H:%M:%S')}] Loaded {ticker} from cache: {len(cached_df)} bars")
                     return cached_df.tail(num_bars)
             except Exception as e:
                 if self.debug:
-                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Cache read error for {ticker}: {e}")
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Cache read error for {ticker}: {e}, falling back to API")
         
         # Download today's 1-minute bars with retry logic
         now = datetime.now()

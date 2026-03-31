@@ -295,6 +295,13 @@ class AutomatedTradingEngine:
                     signal = self.signal_gen.generate_signal(ticker, indicators)
                     self.signals_generated += 1
                     
+                    # Log signal for debugging
+                    signal_strength = signal.get('signal_strength', 0)
+                    self.logger.debug(
+                        f"[{ticker}] Signal: {signal['action']} (confidence: {signal['confidence']}, "
+                        f"strength: {signal_strength}/7, price: ${current_price:.2f})"
+                    )
+                    
                     # Execute signal
                     if signal['action'] in ['BUY', 'SELL']:
                         # Risk check
@@ -306,10 +313,12 @@ class AutomatedTradingEngine:
                             if executed:
                                 trades_count[signal['action']] += 1
                                 self.trades_executed.append(executed)
-                                self.logger.info(f"Trade executed: {signal['action']} {ticker} @ ${current_price:.2f}")
+                                self.logger.info(f"✓ Trade executed: {signal['action']} {ticker} @ ${current_price:.2f}")
+                            else:
+                                self.logger.warning(f"✗ Trade execution failed for {ticker} ({signal['action']})")
                         else:
                             trades_count['BLOCKED'] += 1
-                            self.logger.warning(f"Trade blocked ({ticker}): {reason}")
+                            self.logger.warning(f"⛔ Trade blocked ({ticker}): {reason}")
                     
                     # Monitor positions
                     alerts = self.portfolio_monitor.check_positions()
@@ -317,7 +326,7 @@ class AutomatedTradingEngine:
                         self.logger.warning(f"ALERT: {alert['message']}")
                 
                 except Exception as e:
-                    self.logger.error(f"Error processing {ticker}: {e}")
+                    self.logger.error(f"Error processing {ticker}: {e}", exc_info=True)
                     continue
             
             # Session complete
@@ -340,17 +349,25 @@ class AutomatedTradingEngine:
         action = signal['action']
         
         if action == 'BUY':
+            # Get current account cash
+            account_info = self.broker.get_account_info()
+            cash_available = account_info['cash']
+            
             qty = self.risk_manager.calculate_position_size(
                 ticker, current_price,
-                self.broker.account.cash,
+                cash_available,
                 atr=indicators.get('atr', 0)
             )
             allowed, reason = self.risk_manager.can_execute_buy(
                 ticker, qty, current_price,
                 atr=indicators.get('atr', 0)
             )
+            if not allowed:
+                self.logger.debug(f"BUY blocked for {ticker}: {reason}")
         elif action == 'SELL':
             allowed, reason = self.risk_manager.can_execute_sell(ticker, 1)
+            if not allowed:
+                self.logger.debug(f"SELL blocked for {ticker}: {reason}")
         else:
             allowed, reason = False, "Invalid action"
         
@@ -363,11 +380,19 @@ class AutomatedTradingEngine:
             action = signal['action']
             
             if action == 'BUY':
-                qty = int(signal['price'] / current_price) if signal['price'] > 0 else 1
-                qty = max(1, int(self.broker.account.cash * 0.02 / current_price))
+                # Calculate position size: 2% risk per trade
+                account_info = self.broker.get_account_info()
+                cash_available = account_info['cash']
+                
+                # Position size: 2% of cash divided by price
+                position_value = cash_available * 0.02  # Risk 2% per trade
+                qty = max(1, int(position_value / current_price))
+                
+                self.logger.debug(f"BUY {ticker}: ${position_value:.2f} / ${current_price:.2f} = {qty} shares")
                 
                 order = self.broker.place_buy_order(ticker, qty)
                 if order:
+                    self.logger.info(f"✓ BUY order placed: {qty} × {ticker} @ ${current_price:.2f}")
                     return {
                         'timestamp': datetime.now(),
                         'action': 'BUY',
@@ -376,13 +401,18 @@ class AutomatedTradingEngine:
                         'price': current_price,
                         'order_id': order.id,
                     }
+                else:
+                    self.logger.warning(f"✗ BUY order failed for {ticker} (broker returned None)")
             
             elif action == 'SELL':
                 position = self.broker.get_position(ticker)
                 if position:
                     qty = int(position.qty)
+                    self.logger.debug(f"SELL {ticker}: {qty} shares @ ${current_price:.2f}")
+                    
                     order = self.broker.place_sell_order(ticker, qty)
                     if order:
+                        self.logger.info(f"✓ SELL order placed: {qty} × {ticker} @ ${current_price:.2f}")
                         return {
                             'timestamp': datetime.now(),
                             'action': 'SELL',
@@ -391,9 +421,13 @@ class AutomatedTradingEngine:
                             'price': current_price,
                             'order_id': order.id,
                         }
+                    else:
+                        self.logger.warning(f"✗ SELL order failed for {ticker} (broker returned None)")
+                else:
+                    self.logger.debug(f"No position to SELL for {ticker}")
         
         except Exception as e:
-            self.logger.error(f"Error executing trade: {e}")
+            self.logger.error(f"Error executing {signal['action']} trade for {ticker}: {e}", exc_info=True)
         
         return None
     
