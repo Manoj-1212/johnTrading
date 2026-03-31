@@ -126,8 +126,17 @@ Cache read error: Could not infer format, so each element will be parsed individ
 
 - **0a432a3**: Fix CSV date parsing and add cache cleanup script
 - **b265144**: Add EC2 deployment script for cache fix
+- **f6cf3a8**: Fix indicator calculation Series bugs and CSV date parsing (CRITICAL)
 
 Latest: `git log --oneline | head -5`
+
+### Latest Critical Fix (f6cf3a8)
+Fixes the "truth value of a Series is ambiguous" error by:
+- Fixing Series comparison in volume ratio check
+- Fixing RSI calculation dividing Series objects
+- Ensuring all calculations use scalar values
+- Removing deprecated pandas parameter
+- Adding proper CSV date format handling
 
 ---
 
