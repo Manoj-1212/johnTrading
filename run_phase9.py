@@ -420,8 +420,8 @@ def main():
     tickers = TICKERS if 'TICKERS' in dir() else [
         'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA',
         'JPM', 'JNJ', 'XOM', 'WMT', 'PG',
-        'META', 'TSLA', 'CUDA', 'AMD', 'INTC',
-        'BA', 'GS', 'BRK.B', 'NFLX', 'ADBE'
+        'META', 'TSLA', 'GE', 'AMD', 'INTC',
+        'BA', 'GS', 'V', 'NFLX', 'ADBE', 'PLTR'
     ]
     
     # Create production system

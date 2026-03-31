@@ -9,12 +9,12 @@ from pathlib import Path
 # TICKERS & PORTFOLIO
 # ============================================================================
 
-# 20-ticker universe for diversification
+# 21-ticker universe for diversification (CUDA->GE, BRK.B->V, +PLTR)
 TICKERS = [
     'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA',  # Tech / Mega-cap
     'JPM', 'JNJ', 'XOM', 'WMT', 'PG',         # Blue chip
-    'META', 'TSLA', 'CUDA', 'AMD', 'INTC',    # Growth / Semiconductors
-    'BA', 'GS', 'BRK.B', 'NFLX', 'ADBE'       # Diversified
+    'META', 'TSLA', 'GE', 'AMD', 'INTC',      # Growth / Semiconductors
+    'BA', 'GS', 'V', 'NFLX', 'ADBE', 'PLTR'   # Diversified
 ]
 
 PAPER_CAPITAL = 10000  # Starting paper trading capital

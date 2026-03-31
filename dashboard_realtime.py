@@ -253,7 +253,7 @@ with tab2:
     
     # Generate sample portfolio history
     times = pd.date_range(start='09:30', end='16:00', freq='1min')
-    values = 10000 + np.random.cumsum(np.random.randn(len(times))) * 5
+    values = 10000 + np.cumsum(np.random.randn(len(times))) * 5
     
     fig = go.Figure()
     fig.add_trace(go.Scatter(

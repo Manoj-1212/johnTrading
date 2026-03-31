@@ -364,10 +364,10 @@ class RiskManager:
             'AAPL': 'Technology', 'MSFT': 'Technology', 'GOOGL': 'Technology',
             'AMZN': 'Consumer', 'NVDA': 'Technology', 'META': 'Technology',
             'INTC': 'Technology', 'AMD': 'Technology', 'NFLX': 'Consumer',
-            'CUDA': 'Technology',
+            'PLTR': 'Technology',
             
             # Finance
-            'JPM': 'Finance', 'GS': 'Finance', 'BRK.B': 'Finance',
+            'JPM': 'Finance', 'GS': 'Finance', 'V': 'Finance',
             
             # Healthcare
             'JNJ': 'Healthcare',
@@ -379,7 +379,7 @@ class RiskManager:
             'WMT': 'Consumer', 'PG': 'Consumer',
             
             # Industrials
-            'BA': 'Industrials',
+            'BA': 'Industrials', 'GE': 'Industrials',
             
             # Auto
             'TSLA': 'Auto',
