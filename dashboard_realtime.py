@@ -146,12 +146,13 @@ with st.sidebar:
 # MAIN CONTENT TABS
 # ============================================================================
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📊 Live Signals",
     "💼 Portfolio", 
     "📈 Performance",
     "🔍 Risk Metrics",
-    "📋 Trade Log"
+    "📋 Trade Log",
+    "💹 Trade Execution"
 ])
 
 # ============================================================================
@@ -547,6 +548,156 @@ with tab5:
     
     **Overnight Monitoring**: Watching for after-hours news that could affect opening price
     """)
+
+# ============================================================================
+# TAB 6: TRADE EXECUTION (LIVE PAPER TRADING)
+# ============================================================================
+
+with tab6:
+    st.header("💹 Live Trade Execution & Paper Trading")
+    
+    # Helper function to load latest session data
+    @st.cache_data(ttl=5)  # Refresh every 5 seconds
+    def load_latest_session():
+        logs_dir = Path('phase9_production_trading/logs')
+        if not logs_dir.exists():
+            return None
+        
+        session_files = sorted(logs_dir.glob('session_*.json'), reverse=True)
+        if not session_files:
+            return None
+        
+        with open(session_files[0], 'r') as f:
+            return json.load(f)
+    
+    session_data = load_latest_session()
+    
+    if session_data:
+        # Account Summary
+        account = session_data.get('account', {})
+        trading_data = session_data.get('trading', {})
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            initial_value = account.get('initial_value', 0)
+            st.metric(
+                "Starting Capital",
+                f"${initial_value:,.2f}",
+                help="Paper trading initial portfolio"
+            )
+        
+        with col2:
+            final_value = account.get('final_value', 0)
+            st.metric(
+                "Current Value",
+                f"${final_value:,.2f}",
+                help="Current paper trading portfolio"
+            )
+        
+        with col3:
+            pnl = final_value - initial_value
+            st.metric(
+                "P&L",
+                f"${pnl:+,.2f}",
+                f"{(pnl/initial_value*100):+.2f}%" if initial_value > 0 else "0.00%",
+                delta_color="normal"
+            )
+        
+        with col4:
+            trades_list = trading_data.get('trades', [])
+            st.metric(
+                "Trades Executed",
+                len(trades_list),
+                help="Total executed trades this session"
+            )
+        
+        st.divider()
+        
+        # Executed Trades
+        st.subheader("✅ Executed Trades")
+        
+        if trades_list:
+            trades_display = []
+            for trade in trades_list:
+                trade_time = datetime.fromisoformat(trade['timestamp'])
+                trades_display.append({
+                    'Time': trade_time.strftime('%H:%M:%S'),
+                    'Ticker': trade['ticker'],
+                    'Action': '🟢 BUY' if trade['action'] == 'BUY' else '🔴 SELL',
+                    'Quantity': int(trade['quantity']),
+                    'Price': f"${float(trade['price']):.2f}",
+                    'Total Value': f"${float(trade['quantity']) * float(trade['price']):,.2f}",
+                    'Status': trade.get('status', 'FILLED')
+                })
+            
+            df_executed = pd.DataFrame(trades_display)
+            st.dataframe(df_executed, use_container_width=True, hide_index=True)
+        else:
+            st.info("No trades executed yet in this session")
+        
+        st.divider()
+        
+        # Blocked Trades
+        st.subheader("🚫 Blocked Trades (Risk Management)")
+        
+        blocked_trades = trading_data.get('blocked_trades', [])
+        
+        if blocked_trades:
+            blocked_display = []
+            for trade in blocked_trades:
+                blocked_display.append({
+                    'Ticker': trade.get('ticker'),
+                    'Action': trade.get('action'),
+                    'Reason': trade.get('reason'),
+                    'Confidence': trade.get('confidence', 'N/A')
+                })
+            
+            df_blocked = pd.DataFrame(blocked_display)
+            st.dataframe(df_blocked, use_container_width=True, hide_index=True)
+        else:
+            st.success("✅ No blocked trades - all risk checks passing!")
+        
+        st.divider()
+        
+        # Session Info
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            start_time = datetime.fromisoformat(session_data.get('session_start', ''))
+            st.metric("Session Start", start_time.strftime('%H:%M:%S'))
+        
+        with col2:
+            end_time = datetime.fromisoformat(session_data.get('session_end', ''))
+            st.metric("Session End", end_time.strftime('%H:%M:%S'))
+        
+        with col3:
+            duration = (end_time - start_time).total_seconds() / 60
+            st.metric("Duration", f"{duration:.1f} minutes")
+        
+        st.divider()
+        
+        # Mode Indicator
+        mode = session_data.get('mode', 'UNKNOWN')
+        if mode == 'PAPER':
+            st.success(f"📄 **Paper Trading Mode** - This is SIMULATED trading, no real money is at risk")
+        else:
+            st.error(f"⚠️ **LIVE Trading Mode** - REAL MONEY TRADING ACTIVE")
+        
+    else:
+        st.warning("⏳ No trading session data available yet. Start trading to see execution details.")
+        st.info("""
+        **To start live trading:**
+        1. Run: `sudo systemctl start johntrading`
+        2. Check status: `sudo systemctl status johntrading`
+        3. View logs: `journalctl -u johntrading -f`
+        
+        **Expected during market hours (9:30 AM - 4 PM EST):**
+        - Signals generated every 1 minute
+        - Trades executed based on signal strength
+        - Risk checks prevent over-leveraging
+        - P&L calculated in real-time
+        """)
 
 # ============================================================================
 # FOOTER
