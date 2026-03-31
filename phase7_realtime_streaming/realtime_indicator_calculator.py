@@ -28,7 +28,7 @@ class RealtimeIndicatorCalculator:
     
     def __init__(self, debug=False):
         self.debug = debug
-        self.min_bars_required = 200  # Need 200 bars for all indicators
+        self.min_bars_required = 50  # Reduced from 200 for faster signal generation
     
     def calculate_all(self, bars_df):
         """
