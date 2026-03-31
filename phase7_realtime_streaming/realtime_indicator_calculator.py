@@ -66,6 +66,8 @@ class RealtimeIndicatorCalculator:
             
             # Price Levels
             current_price = bars_df['Close'].iloc[-1]
+            # Ensure current_price is scalar
+            current_price = float(current_price.item()) if hasattr(current_price, 'item') else float(current_price)
             
             # Elliott Wave simplified (just counting recent swings)
             elliott_value = self._elliott_wave_value(bars_df)
@@ -176,8 +178,8 @@ class RealtimeIndicatorCalculator:
         signal_line = macd_line.ewm(span=9, adjust=False).mean()
         macd_hist = macd_line - signal_line
         
-        # Explicitly convert to float
-        return float(macd_line.iloc[-1]), float(signal_line.iloc[-1]), float(macd_hist.iloc[-1])
+        # Extract scalar values explicitly
+        return float(macd_line.iloc[-1].item()), float(signal_line.iloc[-1].item()), float(macd_hist.iloc[-1].item())
     
     def _macd_signal_direction(self, macd_line, signal_line):
         """MACD crossover direction"""
@@ -205,9 +207,9 @@ class RealtimeIndicatorCalculator:
         lower = sma - (std * 2)
         
         # Explicitly convert to float
-        upper_val = float(upper.iloc[-1])
-        sma_val = float(sma.iloc[-1])
-        lower_val = float(lower.iloc[-1])
+        upper_val = float(upper.iloc[-1].item())
+        sma_val = float(sma.iloc[-1].item())
+        lower_val = float(lower.iloc[-1].item())
         
         return upper_val, sma_val, lower_val
     
@@ -225,7 +227,8 @@ class RealtimeIndicatorCalculator:
         atr = tr.rolling(window=period).mean()
         
         atr_val = atr.iloc[-1]
-        return float(atr_val) if atr_val is not None else 0
+        # Use .item() to extract scalar properly
+        return float(atr_val.item()) if atr_val is not None else 0
     
     def _elliott_wave_value(self, bars_df):
         """Simplified Elliott Wave momentum indicator"""
