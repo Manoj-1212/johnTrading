@@ -64,7 +64,9 @@ class RealtimeSignalGenerator:
         buy_signals = 0
         sell_signals = 0
         
+        # Ensure current_price is scalar
         current_price = indicators.get('current_price', 0)
+        current_price = float(current_price) if not isinstance(current_price, (int, float)) else current_price
         
         # === TREND ANALYSIS ===
         if indicators.get('ema_trend') == 'UPTREND':
@@ -113,6 +115,11 @@ class RealtimeSignalGenerator:
         bb_upper = indicators.get('bb_upper', 0)
         bb_lower = indicators.get('bb_lower', 0)
         bb_middle = indicators.get('bb_middle', 0)
+        
+        # Ensure all BB values are scalar
+        bb_upper = float(bb_upper) if not isinstance(bb_upper, (int, float)) else bb_upper
+        bb_lower = float(bb_lower) if not isinstance(bb_lower, (int, float)) else bb_lower
+        bb_middle = float(bb_middle) if not isinstance(bb_middle, (int, float)) else bb_middle
         
         if current_price > bb_upper:
             sell_signals += 1

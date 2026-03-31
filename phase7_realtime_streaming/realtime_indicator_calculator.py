@@ -61,7 +61,7 @@ class RealtimeIndicatorCalculator:
             current_volume = bars_df['Volume'].iloc[-1]
             # Ensure scalar comparison
             volume_ma20_scalar = float(volume_ma20) if not isinstance(volume_ma20, (int, float)) else volume_ma20
-            current_volume_scalar = float(current_volume) if not isinstance(current_volume, (int, float)) else current_volume
+            current_volume_scalar = current_volume.item() if hasattr(current_volume, 'item') else float(current_volume)
             volume_ratio = current_volume_scalar / volume_ma20_scalar if volume_ma20_scalar > 0 else 1
             
             # Price Levels
@@ -95,7 +95,7 @@ class RealtimeIndicatorCalculator:
                 'bb_middle': bb_middle,
                 'bb_lower': bb_lower,
                 'atr': atr14,
-                'atr_percent': (atr14 / float(current_price) * 100) if float(current_price) > 0 else 0,
+                'atr_percent': (atr14 / current_price * 100) if current_price > 0 else 0,
                 
                 # Volume
                 'volume_ratio': volume_ratio,
@@ -127,7 +127,8 @@ class RealtimeIndicatorCalculator:
     def _sma(self, series, period):
         """Simple Moving Average"""
         if len(series) < period:
-            return series.mean().item() if hasattr(series.mean(), 'item') else float(series.mean())
+            val = series.mean()
+            return val.item() if hasattr(val, 'item') else float(val)
         rolling_mean = series.rolling(window=period).mean()
         val = rolling_mean.iloc[-1]
         return val.item() if hasattr(val, 'item') else float(val)
