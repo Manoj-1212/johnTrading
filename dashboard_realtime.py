@@ -567,8 +567,19 @@ with tab6:
         if not session_files:
             return None
         
-        with open(session_files[0], 'r') as f:
-            return json.load(f)
+        # Try to load from most recent to oldest until we find a valid file
+        for session_file in session_files:
+            try:
+                with open(session_file, 'r') as f:
+                    content = f.read().strip()
+                    if not content:  # Skip empty files
+                        continue
+                    return json.loads(content)
+            except (json.JSONDecodeError, IOError, OSError):
+                # Skip files that can't be read or have invalid JSON
+                continue
+        
+        return None  # No valid session files found
     
     session_data = load_latest_session()
     
