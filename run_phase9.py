@@ -228,11 +228,11 @@ class ProductionTradingSystem:
         action = signal['action']
         
         if action == 'BUY':
-            # Calculate position size
+            # Calculate position size (ensure cash is numeric)
             qty = self.risk_manager.calculate_position_size(
                 ticker,
-                current_price,
-                self.broker.account.cash,
+                float(current_price),
+                float(self.broker.account.cash),
                 atr=indicators.get('atr', 0)
             )
             

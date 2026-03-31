@@ -171,6 +171,10 @@ class RiskManager:
             int: Number of shares to buy
         """
         
+        # Ensure account_balance is numeric
+        account_balance = float(account_balance)
+        current_price = float(current_price)
+        
         # Risk 2% of account per position
         risk_amount = account_balance * 0.02
         
