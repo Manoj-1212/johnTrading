@@ -197,8 +197,9 @@ class RealtimeIndicatorCalculator:
     def _bollinger_bands(self, series, period=20):
         """Bollinger Bands"""
         if len(series) < period:
-            val = float(series.iloc[-1])
-            return val, val, val
+            val = series.iloc[-1]
+            val_scalar = float(val.item()) if hasattr(val, 'item') else float(val)
+            return val_scalar, val_scalar, val_scalar
         
         sma = series.rolling(window=period).mean()
         std = series.rolling(window=period).std()
