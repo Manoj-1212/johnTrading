@@ -73,7 +73,7 @@ POSITION_SIZE_PCT = 0.05   # 5% per position (safer, was 20%)
 VOO_OUTPERFORM_TARGET = 0.05  # beat VOO by 5% to scale up
 
 # === PHASE 10: ML FILTER ===
-ML_ENABLED = True          # Enable ML confidence filter
+ML_ENABLED = False         # Disabled until model AUC > 0.60 (currently 0.52)
 ML_MODEL_PATH = "phase10_ml/model.joblib"
 ML_MIN_CONFIDENCE = 0.65   # Only execute trades when ML says >65% confidence
 ML_RETRAIN_DAYS = 30       # Retrain model every 30 days
