@@ -19,6 +19,7 @@ from phase7_realtime_streaming.realtime_indicator_calculator import RealtimeIndi
 from phase7_realtime_streaming.realtime_signal_generator import RealtimeSignalGenerator
 from phase8_broker_integration.alpaca_broker_interface import AlpacaBrokerInterface
 from phase9_risk_management.risk_manager import RiskManager, PortfolioMonitor
+from phase10_ml.ml_filter import MLTradeFilter
 
 # Import config
 try:
@@ -26,6 +27,11 @@ try:
 except ImportError:
     TICKERS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA']
     PAPER_CAPITAL = 10000
+
+try:
+    from config import ML_ENABLED
+except ImportError:
+    ML_ENABLED = False
 
 class ProductionTradingSystem:
     """
@@ -90,6 +96,20 @@ class ProductionTradingSystem:
             debug=debug
         )
         self.portfolio_monitor = PortfolioMonitor(self.broker, self.risk_manager, debug=debug)
+        
+        # Initialize Phase 10: ML Filter
+        self.ml_filter = None
+        if ML_ENABLED:
+            try:
+                self.ml_filter = MLTradeFilter()
+                if self.ml_filter.is_trained():
+                    print("Phase 10: ML Filter loaded ✓")
+                else:
+                    print("Phase 10: ML Filter not trained yet (run run_phase10_train.py first)")
+                    self.ml_filter = None
+            except Exception as e:
+                print(f"Phase 10: ML Filter unavailable: {e}")
+                self.ml_filter = None
         
         # Output directories
         self.output_dir = Path('phase9_production_trading/trades')
@@ -176,6 +196,19 @@ class ProductionTradingSystem:
                 
                 # Phase 9: Check risk before execution
                 if signal['action'] in ['BUY', 'SELL']:
+                    # Phase 10: ML confidence check (BUY only)
+                    if signal['action'] == 'BUY' and self.ml_filter:
+                        ml_ok, ml_conf = self.ml_filter.should_execute(indicators, bars)
+                        if not ml_ok:
+                            trades_count['BLOCKED'] += 1
+                            self._log_risk_event(ticker, signal, {
+                                'reason': f'ML confidence too low ({ml_conf:.0%})',
+                                'allowed': False
+                            })
+                            print(f"[{timestamp.strftime('%H:%M:%S')}] 🤖 {ticker} ML BLOCKED: confidence {ml_conf:.0%}")
+                            self._print_update(signal, ticker)
+                            continue
+                    
                     risk_check = self._check_risk_before_trade(signal, ticker, current_price, indicators)
                     
                     if risk_check['allowed']:
@@ -190,6 +223,7 @@ class ProductionTradingSystem:
                         trades_count['BLOCKED'] += 1
                         self._log_risk_event(ticker, signal, risk_check)
                         print(f"[{timestamp.strftime('%H:%M:%S')}] 🚫 {ticker} BLOCKED: {risk_check['reason']}")
+
                 
                 # Phase 9: Monitor positions
                 alerts = self.portfolio_monitor.check_positions()

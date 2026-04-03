@@ -15,18 +15,6 @@ class SignalGenerator:
     def generate(df: pd.DataFrame, ticker: str) -> dict:
         """
         Generate signal for a ticker based on latest data.
-        
-        Parameters
-        ----------
-        df : pd.DataFrame
-            OHLCV DataFrame (will calculate indicators)
-        ticker : str
-            Ticker symbol
-        
-        Returns
-        -------
-        dict
-            Signal information including action (BUY/SELL/HOLD) and confidence
         """
         # Calculate all indicators
         df = build_full_indicator_set(df)
@@ -41,10 +29,10 @@ class SignalGenerator:
         signal_count = int(latest['signal_count'])
         mandatory_ok = bool(latest['mandatory_ok'])
         
-        # Determine action
+        # Determine action — mandatory_ok is now configurable via config.MANDATORY_SIGNALS
         if mandatory_ok and signal_count >= MIN_SIGNALS_TO_BUY:
             action = 'BUY'
-        elif signal_count <= 2:
+        elif signal_count <= 1:
             action = 'SELL'
         else:
             action = 'HOLD'

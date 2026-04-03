@@ -14,6 +14,11 @@ alpaca-py==0.26.0        # Alpaca broker API for live trading
 python-dateutil==2.8.2   # Date utilities
 pytz==2024.1             # Timezone support
 
+# Phase 10: ML Filter
+xgboost>=2.0.0           # Gradient boosting for trade filtering
+scikit-learn>=1.4.0      # ML utilities (train/test split, metrics)
+joblib>=1.3.0            # Model persistence
+
 # Optional but recommended
 schedule==1.2.0          # Job scheduling for daily tasks
 python-dotenv==1.0.0     # Environment variable management

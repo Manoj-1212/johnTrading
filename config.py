@@ -42,11 +42,11 @@ FIB_LEVELS = [0.382, 0.5, 0.618]   # valid pullback zones
 REGRESSION_LOOKBACK = 50   # bars for linear regression
 
 # === PHASE 3: BACKTEST RULES ===
-MIN_SIGNALS_TO_BUY = 5     # out of 7 (change to 4 to test 4/7)
-MANDATORY_SIGNALS = ["elliott_wave", "fibonacci"]  # MUST be True for any trade
-HOLDING_PERIOD_MAX = 20    # max bars to hold if no exit signal
-STOP_LOSS_PCT = 0.07       # 7% stop loss
-TAKE_PROFIT_PCT = 0.15     # 15% take profit
+MIN_SIGNALS_TO_BUY = 3     # out of 7 — lowered for more trades (was 5)
+MANDATORY_SIGNALS = ["trend", "rsi"]  # Simpler, reliable mandatory signals (was elliott_wave + fibonacci)
+HOLDING_PERIOD_MAX = 10    # max bars to hold if no exit signal (tighter)
+STOP_LOSS_PCT = 0.03       # 3% stop loss (tighter risk control)
+TAKE_PROFIT_PCT = 0.05     # 5% take profit (lock in gains faster)
 
 # === PHASE 3B: REALISTIC BACKTEST ASSUMPTIONS ===
 SLIPPAGE_BPS = 5.0         # 5 basis points entry/exit slippage
@@ -68,6 +68,14 @@ SENSITIVITY_TEST_RANGES = {
 
 # === PHASE 6: PAPER TRADE ===
 PAPER_CAPITAL = 10_000     # starting paper capital
-MAX_POSITIONS = 5
-POSITION_SIZE_PCT = 0.20   # 20% per position
+MAX_POSITIONS = 10         # more positions for diversification (was 5)
+POSITION_SIZE_PCT = 0.05   # 5% per position (safer, was 20%)
 VOO_OUTPERFORM_TARGET = 0.05  # beat VOO by 5% to scale up
+
+# === PHASE 10: ML FILTER ===
+ML_ENABLED = True          # Enable ML confidence filter
+ML_MODEL_PATH = "phase10_ml/model.joblib"
+ML_MIN_CONFIDENCE = 0.65   # Only execute trades when ML says >65% confidence
+ML_RETRAIN_DAYS = 30       # Retrain model every 30 days
+ML_LOOKBACK_BARS = 5       # Predict: will price move +1% in next N bars?
+ML_TARGET_RETURN = 0.01    # 1% target return for classification

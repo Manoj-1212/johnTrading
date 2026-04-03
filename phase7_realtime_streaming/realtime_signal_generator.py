@@ -133,19 +133,44 @@ class RealtimeSignalGenerator:
             position_type = current_position.get('type', 'LONG')
             entry_price = current_position.get('entry_price', 0)
             
-            # Take profit: 2% profit target
             if position_type == 'LONG' and entry_price > 0:
-                profit_target = entry_price * 1.02
-                if current_price >= profit_target:
+                pnl_pct = (current_price - entry_price) / entry_price
+                
+                # ATR-based dynamic take profit (2x ATR from entry)
+                atr = indicators.get('atr', 0)
+                if atr > 0:
+                    atr_take_profit = entry_price + (atr * 2)
+                    atr_stop_loss = entry_price - (atr * 1.5)
+                else:
+                    atr_take_profit = entry_price * 1.03
+                    atr_stop_loss = entry_price * 0.985
+                
+                # Take profit
+                if current_price >= atr_take_profit:
+                    sell_signals += 2
+                    reasons.append(f"Take profit hit ({pnl_pct:+.1%}, ATR target: ${atr_take_profit:.2f})")
+                
+                # Hard stop loss: 3%
+                if pnl_pct <= -0.03:
+                    sell_signals += 3  # Strong weight — must exit
+                    reasons.append(f"Hard stop loss ({pnl_pct:+.1%})")
+                
+                # ATR-based stop loss
+                elif current_price <= atr_stop_loss:
+                    sell_signals += 2
+                    reasons.append(f"ATR stop loss (${atr_stop_loss:.2f})")
+                
+                # Trailing stop: if was up >2% but now dropping back
+                high_water = current_position.get('high_water', entry_price)
+                if high_water > entry_price * 1.02 and current_price < high_water * 0.985:
+                    sell_signals += 2
+                    reasons.append(f"Trailing stop (peak: ${high_water:.2f}, now: ${current_price:.2f})")
+                
+                # Time exit: held for too long with no gain
+                hold_minutes = current_position.get('hold_minutes', 0)
+                if hold_minutes > 120 and pnl_pct < 0.005:
                     sell_signals += 1
-                    reasons.append(f"Take profit (Target: ${profit_target:.2f})")
-            
-            # Stop loss: 1.5% stop
-            if position_type == 'LONG' and entry_price > 0:
-                stop_loss = entry_price * 0.985
-                if current_price <= stop_loss:
-                    sell_signals += 2  # Extra weight to stop loss
-                    reasons.append(f"Stop loss (${stop_loss:.2f})")
+                    reasons.append(f"Time exit (held {hold_minutes}min with {pnl_pct:+.1%})")
         
         # === DETERMINE SIGNAL ===
         action = self._determine_action(buy_signals, sell_signals, current_price, indicators)
