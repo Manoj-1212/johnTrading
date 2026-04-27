@@ -66,9 +66,12 @@ def _alpaca_client():
         secret = os.getenv('APCA_API_SECRET_KEY')
         if not key or not secret or key == 'your_api_key_here':
             return None
-        base = os.getenv('APCA_API_BASE_URL', 'https://paper-api.alpaca.markets')
-        return TradingClient(key, secret, url_override=base)
-    except Exception:
+        # Set base URL via env var — same pattern as AlpacaBrokerInterface (no url_override)
+        if not os.getenv('APCA_API_BASE_URL'):
+            os.environ['APCA_API_BASE_URL'] = 'https://paper-api.alpaca.markets'
+        return TradingClient(key, secret)
+    except Exception as e:
+        st.session_state['_alpaca_client_err'] = str(e)
         return None
 
 @st.cache_data(ttl=60)
@@ -86,7 +89,8 @@ def _alpaca_account():
             'last_equity':     float(a.last_equity),
             'account_number':  str(a.account_number),
         }
-    except Exception:
+    except Exception as e:
+        st.session_state['_alpaca_acct_err'] = str(e)
         return None
 
 @st.cache_data(ttl=60)
@@ -107,54 +111,70 @@ def _alpaca_positions():
                 'P&L %':                float(p.unrealized_plpc) * 100,
             })
         return rows
-    except Exception:
+    except Exception as e:
+        st.session_state['_alpaca_pos_err'] = str(e)
         return []
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=30)  # short TTL so fresh data shows quickly
 def _alpaca_filled_orders(days: int = 30):
     c = _alpaca_client()
     if not c:
-        return []
+        return [], None
     try:
         import pytz
         from alpaca.trading.requests import GetOrdersRequest
         from alpaca.trading.enums   import QueryOrderStatus
         since = datetime.now(tz=pytz.UTC) - timedelta(days=days)
-        req   = GetOrdersRequest(status=QueryOrderStatus.CLOSED, limit=500, after=since)
+        req   = GetOrdersRequest(status=QueryOrderStatus.ALL, limit=500, after=since)
         rows  = []
-        for o in c.get_orders(filter=req):
-            if str(o.status) not in ('filled', 'partially_filled'):
+        all_orders = c.get_orders(filter=req)
+        for o in all_orders:
+            # Use .value to safely compare str-enums regardless of __str__ behaviour
+            status_val = o.status.value if hasattr(o.status, 'value') else str(o.status)
+            if status_val not in ('filled', 'partially_filled'):
                 continue
             fa = o.filled_at
             ts        = fa.strftime('%Y-%m-%d %H:%M:%S') if fa and hasattr(fa, 'strftime') else str(fa or '')
             date_only = ts[:10]
+            side_val  = o.side.value if hasattr(o.side, 'value') else str(o.side)
+            type_val  = o.type.value if hasattr(o.type, 'value') else str(o.type)
             rows.append({
                 'Date':            date_only,
                 'Time':            ts,
                 'Symbol':          o.symbol,
-                'Side':            str(o.side).upper(),
+                'Side':            side_val.upper(),
                 'Qty':             float(o.filled_qty or 0),
                 'Avg Fill ($)':    float(o.filled_avg_price or 0),
                 'Order Value ($)': float(o.filled_qty or 0) * float(o.filled_avg_price or 0),
-                'Type':            str(o.type),
+                'Type':            type_val,
                 'Order ID':        str(o.id)[:8] + '…',
             })
-        return rows
-    except Exception:
-        return []
+        return rows, None  # (data, error)
+    except Exception as e:
+        import traceback
+        return [], traceback.format_exc()
 
 @st.cache_data(ttl=300)
 def _alpaca_portfolio_history(period: str = '1M'):
     c = _alpaca_client()
     if not c:
-        return None
+        return None, None
     try:
         import pytz
-        from alpaca.trading.requests import GetPortfolioHistoryRequest
-        req  = GetPortfolioHistoryRequest(period=period, timeframe='1D')
-        hist = c.get_portfolio_history(filter=req)
+        # Try with PortfolioHistoryTimeframe enum first, fall back to string
+        try:
+            from alpaca.trading.enums    import PortfolioHistoryTimeframe
+            from alpaca.trading.requests import GetPortfolioHistoryRequest
+            req  = GetPortfolioHistoryRequest(
+                period=period,
+                timeframe=PortfolioHistoryTimeframe.ONE_DAY,
+            )
+            hist = c.get_portfolio_history(filter=req)
+        except (ImportError, Exception):
+            # Fallback: call without request object (uses Alpaca defaults)
+            hist = c.get_portfolio_history()
         if not hist or not hist.timestamp:
-            return None
+            return None, 'No history data returned'
         rows = []
         for ts, eq, pnl, pnl_pct in zip(hist.timestamp, hist.equity,
                                          hist.profit_loss, hist.profit_loss_pct):
@@ -164,9 +184,10 @@ def _alpaca_portfolio_history(period: str = '1M'):
                 'P&L ($)': float(pnl     or 0),
                 'P&L (%)': float(pnl_pct or 0) * 100,
             })
-        return pd.DataFrame(rows)
-    except Exception:
-        return None
+        return pd.DataFrame(rows), None
+    except Exception as e:
+        import traceback
+        return None, traceback.format_exc()
 
 def _round_trips(orders_df: pd.DataFrame) -> pd.DataFrame:
     """FIFO BUY→SELL matching for realised P&L."""
@@ -981,8 +1002,11 @@ with tab7:
     today_only  = st.checkbox("Today only", key="rt_today")
 
     if connected:
-        ord_rows = _alpaca_filled_orders(days=days_filter)
-        if ord_rows:
+        ord_rows, ord_err = _alpaca_filled_orders(days=days_filter)
+        if ord_err:
+            with st.expander("⚠️ Error fetching orders (click to debug)", expanded=True):
+                st.code(ord_err)
+        elif ord_rows:
             ord_df = pd.DataFrame(ord_rows)
             if today_only:
                 ord_df = ord_df[ord_df['Date'] == datetime.now().strftime('%Y-%m-%d')]
@@ -1019,8 +1043,10 @@ with tab7:
     st.caption("BUY → SELL pairs matched with FIFO per symbol")
 
     if connected:
-        rt_rows = _alpaca_filled_orders(days=days_filter)
-        if rt_rows:
+        rt_rows, rt_err = _alpaca_filled_orders(days=days_filter)
+        if rt_err:
+            st.info("Cannot compute round-trips — see error in Filled Orders section.")
+        elif rt_rows:
             rt_df = _round_trips(pd.DataFrame(rt_rows))
             if not rt_df.empty:
                 total_r  = rt_df['P&L ($)'].sum()
@@ -1094,9 +1120,12 @@ with tab7:
             "Period", ["1W", "1M", "3M", "6M", "1A"],
             index=1, key="rt_hist_period",
         )
-        hist_df = _alpaca_portfolio_history(period=hist_period)
+        hist_df, hist_err = _alpaca_portfolio_history(period=hist_period)
 
-        if hist_df is not None and not hist_df.empty:
+        if hist_err and hist_df is None:
+            with st.expander("⚠️ Error fetching portfolio history (click to debug)", expanded=True):
+                st.code(hist_err)
+        elif hist_df is not None and not hist_df.empty:
             fig_pnl = go.Figure(go.Bar(
                 x=hist_df['Date'],
                 y=hist_df['P&L ($)'],
