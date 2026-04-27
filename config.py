@@ -79,3 +79,9 @@ ML_MIN_CONFIDENCE = 0.65   # Only execute trades when ML says >65% confidence
 ML_RETRAIN_DAYS = 30       # Retrain model every 30 days
 ML_LOOKBACK_BARS = 5       # Predict: will price move +1% in next N bars?
 ML_TARGET_RETURN = 0.01    # 1% target return for classification
+
+# === LIQUIDITY SWEEP ===
+LIQUIDITY_SWEEP_LOOKBACK = 20    # bars to establish swing high/low (pivot window)
+LIQUIDITY_SWEEP_MIN_PCT  = 0.001 # minimum sweep size — 0.1% beyond the level
+LIQUIDITY_SWEEP_MAX_PCT  = 0.003 # maximum sweep size — 0.3% beyond (no full breakout)
+LIQUIDITY_SWEEP_CANDLES  = 3     # reversal must occur within this many candles

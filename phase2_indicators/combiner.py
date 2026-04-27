@@ -11,13 +11,15 @@ from phase2_indicators.volatility import add_atr_signal
 from phase2_indicators.elliott_wave import add_elliott_wave_signal
 from phase2_indicators.fibonacci import add_fibonacci_signal
 from phase2_indicators.regression import add_regression_signal
+from phase2_indicators.liquidity_sweep import add_liquidity_sweep_signal
 from config import MANDATORY_SIGNALS
 
 
-# List of all 7 signal column names
+# List of all 8 signal column names
 SIGNAL_COLS = [
     'trend_signal', 'rsi_signal', 'volume_signal',
-    'atr_signal', 'elliott_wave_signal', 'fibonacci_signal', 'regression_signal'
+    'atr_signal', 'elliott_wave_signal', 'fibonacci_signal', 'regression_signal',
+    'liquidity_sweep_signal',
 ]
 
 # Map short names to signal column names
@@ -29,6 +31,7 @@ _SIGNAL_NAME_MAP = {
     'elliott_wave': 'elliott_wave_signal',
     'fibonacci': 'fibonacci_signal',
     'regression': 'regression_signal',
+    'liquidity_sweep': 'liquidity_sweep_signal',
 }
 
 
@@ -44,7 +47,7 @@ def build_full_indicator_set(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
     
-    # Apply all 7 indicators
+    # Apply all 8 indicators
     df = add_trend_signal(df)
     df = add_rsi_signal(df)
     df = add_volume_signal(df)
@@ -52,6 +55,7 @@ def build_full_indicator_set(df: pd.DataFrame) -> pd.DataFrame:
     df = add_elliott_wave_signal(df)
     df = add_fibonacci_signal(df)
     df = add_regression_signal(df)
+    df = add_liquidity_sweep_signal(df)
     
     # Count active signals
     df['signal_count'] = df[SIGNAL_COLS].sum(axis=1).astype(int)
@@ -68,6 +72,6 @@ def build_full_indicator_set(df: pd.DataFrame) -> pd.DataFrame:
         df['mandatory_ok'] = True
     
     # Composite score (0.0 to 1.0)
-    df['composite_score'] = df['signal_count'] / 7.0
+    df['composite_score'] = df['signal_count'] / len(SIGNAL_COLS)
     
     return df

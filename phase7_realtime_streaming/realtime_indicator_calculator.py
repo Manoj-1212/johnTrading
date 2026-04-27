@@ -75,6 +75,9 @@ class RealtimeIndicatorCalculator:
             # Fibonacci levels
             fib_levels = self._fibonacci_levels(bars_df)
             
+            # Liquidity sweep pattern
+            liq_sweep = self._liquidity_sweep(bars_df)
+            
             indicators = {
                 'timestamp': datetime.now(),
                 'current_price': current_price,
@@ -109,6 +112,12 @@ class RealtimeIndicatorCalculator:
                 # Fibonacci
                 'fib_resistance': fib_levels['resistance'],
                 'fib_support': fib_levels['support'],
+                
+                # Liquidity Sweep
+                'liquidity_sweep': liq_sweep['signal'],
+                'swing_high': liq_sweep['swing_high'],
+                'swing_low': liq_sweep['swing_low'],
+                'liquidity_sweep_desc': liq_sweep['description'],
             }
             
             return indicators
@@ -265,6 +274,66 @@ class RealtimeIndicatorCalculator:
             'range': diff
         }
     
+    def _liquidity_sweep(self, bars_df, lookback=20, sweep_min_pct=0.001,
+                         sweep_max_pct=0.003, max_candles=3):
+        """
+        Detect liquidity sweep pattern on real-time bars.
+
+        A sweep fires when:
+          LONG:  any of the last max_candles bars wicked 0.1-0.3 % below
+                 the swing_low, AND the current bar closes back above it.
+          SHORT: any of the last max_candles bars wicked 0.1-0.3 % above
+                 the swing_high, AND the current bar closes back below it.
+
+        Returns dict: signal ('LONG_SWEEP'|'SHORT_SWEEP'|'NONE'),
+                      swing_high, swing_low, description
+        """
+        min_required = lookback + max_candles + 1
+        if len(bars_df) < min_required:
+            return {'signal': 'NONE', 'swing_high': 0, 'swing_low': 0, 'description': ''}
+        
+        # Pivot window: bars BEFORE the sweep zone (exclude last max_candles bars)
+        pivot_bars = bars_df.iloc[-(lookback + max_candles):-max_candles]
+        swing_high = float(pivot_bars['High'].max())
+        swing_low  = float(pivot_bars['Low'].min())
+        
+        # Sweep zone: the most recent max_candles bars
+        sweep_bars = bars_df.iloc[-max_candles:]
+        current_close = float(bars_df['Close'].iloc[-1])
+        
+        lows  = [float(v) for v in sweep_bars['Low'].values]
+        highs = [float(v) for v in sweep_bars['High'].values]
+        
+        # === BULLISH LIQUIDITY SWEEP ===
+        if swing_low > 0:
+            swept_below = any(l < swing_low * (1 - sweep_min_pct) for l in lows)
+            not_too_deep = all(l >= swing_low * (1 - sweep_max_pct) for l in lows)
+            reversed_up  = current_close > swing_low
+            
+            if swept_below and not_too_deep and reversed_up:
+                return {
+                    'signal': 'LONG_SWEEP',
+                    'swing_high': swing_high,
+                    'swing_low': swing_low,
+                    'description': f'Bullish sweep below ${swing_low:.2f} → reversed to ${current_close:.2f}',
+                }
+        
+        # === BEARISH LIQUIDITY SWEEP ===
+        if swing_high > 0:
+            swept_above  = any(h > swing_high * (1 + sweep_min_pct) for h in highs)
+            not_too_high = all(h <= swing_high * (1 + sweep_max_pct) for h in highs)
+            reversed_down = current_close < swing_high
+            
+            if swept_above and not_too_high and reversed_down:
+                return {
+                    'signal': 'SHORT_SWEEP',
+                    'swing_high': swing_high,
+                    'swing_low': swing_low,
+                    'description': f'Bearish sweep above ${swing_high:.2f} → reversed to ${current_close:.2f}',
+                }
+        
+        return {'signal': 'NONE', 'swing_high': swing_high, 'swing_low': swing_low, 'description': ''}
+    
     def _empty_indicators(self):
         """Return empty indicators dict"""
         return {
@@ -288,6 +357,10 @@ class RealtimeIndicatorCalculator:
             'elliott_value': 0,
             'fib_resistance': 0,
             'fib_support': 0,
+            'liquidity_sweep': 'NONE',
+            'swing_high': 0,
+            'swing_low': 0,
+            'liquidity_sweep_desc': '',
         }
 
 

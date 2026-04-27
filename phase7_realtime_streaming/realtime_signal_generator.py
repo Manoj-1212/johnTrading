@@ -128,6 +128,19 @@ class RealtimeSignalGenerator:
             buy_signals += 1
             reasons.append("Price below lower Bollinger Band (Oversold)")
         
+        # === LIQUIDITY SWEEP ANALYSIS (weight = 2) ===
+        sweep = indicators.get('liquidity_sweep', 'NONE')
+        if sweep == 'LONG_SWEEP':
+            buy_signals += 2
+            swing_low = indicators.get('swing_low', 0)
+            desc = indicators.get('liquidity_sweep_desc', '')
+            reasons.append(f"LIQUIDITY_SWEEP: Bullish sweep below ${swing_low:.2f} (+2) | {desc}")
+        elif sweep == 'SHORT_SWEEP':
+            sell_signals += 2
+            swing_high = indicators.get('swing_high', 0)
+            desc = indicators.get('liquidity_sweep_desc', '')
+            reasons.append(f"LIQUIDITY_SWEEP: Bearish sweep above ${swing_high:.2f} (+2) | {desc}")
+        
         # === EXIT SIGNALS (if currently holding) ===
         if current_position:
             position_type = current_position.get('type', 'LONG')
