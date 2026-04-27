@@ -19,6 +19,156 @@ import json
 import os
 from pathlib import Path
 
+# ---------------------------------------------------------------------------
+# Alpaca helpers — lazy import, only executed when the Alpaca tab is active
+# ---------------------------------------------------------------------------
+def _alpaca_client():
+    try:
+        from alpaca.trading.client import TradingClient
+        key    = os.getenv('APCA_API_KEY_ID')
+        secret = os.getenv('APCA_API_SECRET_KEY')
+        if not key or not secret:
+            return None
+        base = os.getenv('APCA_API_BASE_URL', 'https://paper-api.alpaca.markets')
+        return TradingClient(key, secret, url_override=base)
+    except Exception:
+        return None
+
+@st.cache_data(ttl=60)
+def _alpaca_account():
+    c = _alpaca_client()
+    if not c:
+        return None
+    try:
+        a = c.get_account()
+        return {
+            'portfolio_value': float(a.portfolio_value),
+            'cash':            float(a.cash),
+            'equity':          float(a.equity),
+            'buying_power':    float(a.buying_power),
+            'last_equity':     float(a.last_equity),
+            'account_number':  str(a.account_number),
+        }
+    except Exception:
+        return None
+
+@st.cache_data(ttl=60)
+def _alpaca_positions():
+    c = _alpaca_client()
+    if not c:
+        return []
+    try:
+        rows = []
+        for p in c.get_all_positions():
+            rows.append({
+                'Symbol':               p.symbol,
+                'Qty':                  float(p.qty),
+                'Avg Entry ($)':        float(p.avg_entry_price),
+                'Current ($)':          float(p.current_price),
+                'Market Value ($)':     float(p.market_value),
+                'Unrealised P&L ($)':   float(p.unrealized_pl),
+                'P&L %':                float(p.unrealized_plpc) * 100,
+            })
+        return rows
+    except Exception:
+        return []
+
+@st.cache_data(ttl=120)
+def _alpaca_filled_orders(days: int = 30):
+    c = _alpaca_client()
+    if not c:
+        return []
+    try:
+        import pytz
+        from alpaca.trading.requests import GetOrdersRequest
+        from alpaca.trading.enums   import QueryOrderStatus
+        since = datetime.now(tz=pytz.UTC) - timedelta(days=days)
+        req   = GetOrdersRequest(status=QueryOrderStatus.CLOSED, limit=500, after=since)
+        rows  = []
+        for o in c.get_orders(filter=req):
+            if str(o.status) not in ('filled', 'partially_filled'):
+                continue
+            fa = o.filled_at
+            ts        = fa.strftime('%Y-%m-%d %H:%M:%S') if fa and hasattr(fa, 'strftime') else str(fa or '')
+            date_only = ts[:10]
+            rows.append({
+                'Date':            date_only,
+                'Time':            ts,
+                'Symbol':          o.symbol,
+                'Side':            str(o.side).upper(),
+                'Qty':             float(o.filled_qty or 0),
+                'Avg Fill ($)':    float(o.filled_avg_price or 0),
+                'Order Value ($)': float(o.filled_qty or 0) * float(o.filled_avg_price or 0),
+                'Type':            str(o.type),
+                'Order ID':        str(o.id)[:8] + '…',
+            })
+        return rows
+    except Exception:
+        return []
+
+@st.cache_data(ttl=300)
+def _alpaca_portfolio_history(period: str = '1M'):
+    c = _alpaca_client()
+    if not c:
+        return None
+    try:
+        import pytz
+        from alpaca.trading.requests import GetPortfolioHistoryRequest
+        req  = GetPortfolioHistoryRequest(period=period, timeframe='1D')
+        hist = c.get_portfolio_history(filter=req)
+        if not hist or not hist.timestamp:
+            return None
+        rows = []
+        for ts, eq, pnl, pnl_pct in zip(hist.timestamp, hist.equity,
+                                         hist.profit_loss, hist.profit_loss_pct):
+            rows.append({
+                'Date':    datetime.fromtimestamp(ts, tz=pytz.UTC).strftime('%Y-%m-%d'),
+                'Equity':  float(eq      or 0),
+                'P&L ($)': float(pnl     or 0),
+                'P&L (%)': float(pnl_pct or 0) * 100,
+            })
+        return pd.DataFrame(rows)
+    except Exception:
+        return None
+
+def _round_trips(orders_df: pd.DataFrame) -> pd.DataFrame:
+    """FIFO BUY→SELL matching for realised P&L."""
+    if orders_df.empty:
+        return pd.DataFrame()
+    trips = []
+    buys  = {}
+    for _, r in orders_df.sort_values('Time').iterrows():
+        sym   = r['Symbol']
+        side  = r['Side'].upper()
+        qty   = float(r['Qty'])
+        price = float(r['Avg Fill ($)'])
+        date  = r['Date']
+        if 'BUY' in side:
+            buys.setdefault(sym, []).append({'qty': qty, 'price': price, 'date': date})
+        elif 'SELL' in side and buys.get(sym):
+            rem = qty
+            while rem > 0 and buys[sym]:
+                lot     = buys[sym][0]
+                matched = min(rem, lot['qty'])
+                pnl     = (price - lot['price']) * matched
+                pnl_pct = ((price - lot['price']) / lot['price']) * 100 if lot['price'] else 0
+                trips.append({
+                    'Symbol':    sym,
+                    'Buy Date':  lot['date'],
+                    'Sell Date': date,
+                    'Qty':       matched,
+                    'Entry ($)': lot['price'],
+                    'Exit ($)':  price,
+                    'P&L ($)':   round(pnl, 2),
+                    'P&L %':     round(pnl_pct, 2),
+                    'Result':    '✅ Win' if pnl > 0 else ('⬜ BE' if pnl == 0 else '❌ Loss'),
+                })
+                lot['qty'] -= matched
+                rem        -= matched
+                if lot['qty'] <= 0:
+                    buys[sym].pop(0)
+    return pd.DataFrame(trips)
+
 # Page config
 st.set_page_config(
     page_title="🚀 Real-Time Trading Dashboard (Phases 7-9)",
@@ -146,13 +296,14 @@ with st.sidebar:
 # MAIN CONTENT TABS
 # ============================================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📊 Live Signals",
-    "💼 Portfolio", 
+    "💼 Portfolio",
     "📈 Performance",
     "🔍 Risk Metrics",
     "📋 Trade Log",
-    "💹 Trade Execution"
+    "💹 Trade Execution",
+    "🏆 Alpaca Report",
 ])
 
 # ============================================================================
@@ -709,6 +860,254 @@ with tab6:
         - Risk checks prevent over-leveraging
         - P&L calculated in real-time
         """)
+
+# ============================================================================
+# TAB 7: ALPACA TRADE REPORT
+# ============================================================================
+
+with tab7:
+    st.header("🏆 Alpaca Trade Report")
+    st.caption("Live data from Alpaca Paper Trading API · account / positions / filled orders · cached 60 s")
+
+    acct_data = _alpaca_account()
+    connected = acct_data is not None
+
+    if not connected:
+        st.warning(
+            "⚠️ Alpaca credentials not in environment. "
+            "Set **APCA_API_KEY_ID** and **APCA_API_SECRET_KEY** — then restart the service.",
+            icon="⚠️",
+        )
+
+    # ── Account summary ───────────────────────────────────────────────────
+    st.subheader("📊 Account Summary")
+    if connected:
+        today_pnl = acct_data['equity'] - acct_data['last_equity']
+        today_pct = (today_pnl / acct_data['last_equity'] * 100) if acct_data['last_equity'] else 0
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Portfolio Value",  f"${acct_data['portfolio_value']:,.2f}")
+        c2.metric("Equity",           f"${acct_data['equity']:,.2f}")
+        c3.metric("Cash",             f"${acct_data['cash']:,.2f}")
+        c4.metric("Today's P&L",
+                  f"${today_pnl:+,.2f}",
+                  delta=f"{today_pct:+.2f}%",
+                  delta_color="normal")
+        c5.metric("Buying Power",     f"${acct_data['buying_power']:,.2f}")
+        st.caption(f"Account · {acct_data['account_number']} · PAPER TRADING")
+    else:
+        st.info("Connect Alpaca to see live account summary.")
+
+    st.divider()
+
+    # ── Open Positions ────────────────────────────────────────────────────
+    st.subheader("📍 Open Positions")
+    if connected:
+        pos_rows = _alpaca_positions()
+        if pos_rows:
+            pos_df = pd.DataFrame(pos_rows)
+            tot_unreal = pos_df["Unrealised P&L ($)"].sum()
+            tot_mkt    = pos_df["Market Value ($)"].sum()
+            pa, pb, pc = st.columns(3)
+            pa.metric("Positions",          len(pos_df))
+            pb.metric("Total Market Value", f"${tot_mkt:,.2f}")
+            pc.metric("Total Unrealised P&L",
+                      f"${tot_unreal:+,.2f}",
+                      delta_color="normal")
+            st.dataframe(
+                pos_df.style
+                    .format({
+                        "Qty":                "{:.2f}",
+                        "Avg Entry ($)":      "${:,.2f}",
+                        "Current ($)":        "${:,.2f}",
+                        "Market Value ($)":   "${:,.2f}",
+                        "Unrealised P&L ($)": "${:+,.2f}",
+                        "P&L %":              "{:+.2f}%",
+                    })
+                    .applymap(
+                        lambda v: "color: #00cc44" if isinstance(v, (int,float)) and v > 0
+                                  else ("color: #ff4444" if isinstance(v, (int,float)) and v < 0 else ""),
+                        subset=["Unrealised P&L ($)", "P&L %"]
+                    ),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.info("No open positions.")
+    else:
+        st.info("Connect Alpaca to see positions.")
+
+    st.divider()
+
+    # ── Filled Orders ─────────────────────────────────────────────────────
+    st.subheader("✅ Filled Orders")
+    days_filter = st.slider("Days to look back", 1, 90, 30, key="rt_days")
+    today_only  = st.checkbox("Today only", key="rt_today")
+
+    if connected:
+        ord_rows = _alpaca_filled_orders(days=days_filter)
+        if ord_rows:
+            ord_df = pd.DataFrame(ord_rows)
+            if today_only:
+                ord_df = ord_df[ord_df['Date'] == datetime.now().strftime('%Y-%m-%d')]
+
+            if not ord_df.empty:
+                buys_df  = ord_df[ord_df['Side'].str.contains('BUY',  case=False, na=False)]
+                sells_df = ord_df[ord_df['Side'].str.contains('SELL', case=False, na=False)]
+                oc1, oc2, oc3 = st.columns(3)
+                oc1.metric("Total Orders", len(ord_df))
+                oc2.metric("Buys",  len(buys_df),
+                           delta=f"${buys_df['Order Value ($)'].sum():,.0f} notional")
+                oc3.metric("Sells", len(sells_df),
+                           delta=f"${sells_df['Order Value ($)'].sum():,.0f} notional")
+                st.dataframe(
+                    ord_df.style.format({
+                        "Qty":             "{:.2f}",
+                        "Avg Fill ($)":    "${:,.2f}",
+                        "Order Value ($)": "${:,.2f}",
+                    }),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.info("No filled orders match this filter.")
+        else:
+            st.info("No filled orders found for the selected period.")
+    else:
+        st.info("Connect Alpaca to see filled orders.")
+
+    st.divider()
+
+    # ── Completed Round-Trips ─────────────────────────────────────────────
+    st.subheader("💰 Completed Trades — Realised P&L")
+    st.caption("BUY → SELL pairs matched with FIFO per symbol")
+
+    if connected:
+        rt_rows = _alpaca_filled_orders(days=days_filter)
+        if rt_rows:
+            rt_df = _round_trips(pd.DataFrame(rt_rows))
+            if not rt_df.empty:
+                total_r  = rt_df['P&L ($)'].sum()
+                wins_n   = (rt_df['P&L ($)'] > 0).sum()
+                loss_n   = (rt_df['P&L ($)'] < 0).sum()
+                wr       = wins_n / len(rt_df) * 100 if len(rt_df) else 0
+                avg_win  = rt_df.loc[rt_df['P&L ($)'] > 0, 'P&L ($)'].mean() if wins_n  else 0
+                avg_loss = rt_df.loc[rt_df['P&L ($)'] < 0, 'P&L ($)'].mean() if loss_n  else 0
+                win_sum  = rt_df.loc[rt_df['P&L ($)'] > 0, 'P&L ($)'].sum()
+                loss_sum = abs(rt_df.loc[rt_df['P&L ($)'] < 0, 'P&L ($)'].sum())
+                pf       = (win_sum / loss_sum) if loss_sum else float('inf')
+
+                rm1,rm2,rm3,rm4,rm5,rm6 = st.columns(6)
+                rm1.metric("Trades",        len(rt_df))
+                rm2.metric("Realised P&L",  f"${total_r:+,.2f}", delta_color="normal")
+                rm3.metric("Win Rate",      f"{wr:.1f}%")
+                rm4.metric("Avg Win",       f"${avg_win:,.2f}")
+                rm5.metric("Avg Loss",      f"${avg_loss:,.2f}")
+                rm6.metric("Profit Factor", f"{pf:.2f}" if pf != float('inf') else "∞")
+
+                st.dataframe(
+                    rt_df.style
+                        .format({
+                            "Qty":       "{:.2f}",
+                            "Entry ($)": "${:,.2f}",
+                            "Exit ($)":  "${:,.2f}",
+                            "P&L ($)":   "${:+,.2f}",
+                            "P&L %":     "{:+.2f}%",
+                        })
+                        .applymap(
+                            lambda v: "color: #00cc44" if isinstance(v, (int,float)) and v > 0
+                                      else ("color: #ff4444" if isinstance(v, (int,float)) and v < 0 else ""),
+                            subset=["P&L ($)", "P&L %"]
+                        ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                # P&L bar chart by symbol
+                sym_pnl = rt_df.groupby('Symbol')['P&L ($)'].sum().reset_index().sort_values('P&L ($)')
+                fig_bar = go.Figure(go.Bar(
+                    x=sym_pnl['Symbol'],
+                    y=sym_pnl['P&L ($)'],
+                    marker_color=['#00cc44' if v >= 0 else '#ff4444' for v in sym_pnl['P&L ($)']],
+                    text=[f"${v:+,.2f}" for v in sym_pnl['P&L ($)']],
+                    textposition='outside',
+                ))
+                fig_bar.update_layout(
+                    title="Realised P&L per Symbol",
+                    yaxis_title="P&L ($)",
+                    height=320,
+                    template='plotly_dark',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+            else:
+                st.info("No completed round-trips yet (need a matching SELL for each BUY).")
+        else:
+            st.info("No order data available.")
+    else:
+        st.info("Connect Alpaca to see completed trades.")
+
+    st.divider()
+
+    # ── Daily P&L Chart ───────────────────────────────────────────────────
+    st.subheader("📅 Daily P&L — Portfolio History")
+
+    if connected:
+        hist_period = st.selectbox(
+            "Period", ["1W", "1M", "3M", "6M", "1A"],
+            index=1, key="rt_hist_period",
+        )
+        hist_df = _alpaca_portfolio_history(period=hist_period)
+
+        if hist_df is not None and not hist_df.empty:
+            fig_pnl = go.Figure(go.Bar(
+                x=hist_df['Date'],
+                y=hist_df['P&L ($)'],
+                marker_color=['#00cc44' if v >= 0 else '#ff4444' for v in hist_df['P&L ($)']],
+                text=[f"${v:+,.2f}" for v in hist_df['P&L ($)']],
+                textposition='outside',
+            ))
+            fig_pnl.update_layout(
+                title="Daily P&L",
+                xaxis_title="Date", yaxis_title="P&L ($)",
+                height=320, template='plotly_dark',
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            )
+            st.plotly_chart(fig_pnl, use_container_width=True)
+
+            fig_eq = go.Figure(go.Scatter(
+                x=hist_df['Date'], y=hist_df['Equity'],
+                mode='lines+markers',
+                line=dict(color='#667eea', width=2),
+                fill='tozeroy', fillcolor='rgba(102,126,234,0.12)',
+            ))
+            fig_eq.update_layout(
+                title="Equity Curve",
+                xaxis_title="Date", yaxis_title="Equity ($)",
+                height=320, hovermode='x unified', template='plotly_dark',
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            )
+            st.plotly_chart(fig_eq, use_container_width=True)
+
+            with st.expander("📋 Daily data table"):
+                st.dataframe(
+                    hist_df.style.format({
+                        'Equity':  '${:,.2f}',
+                        'P&L ($)': '${:+,.2f}',
+                        'P&L (%)': '{:+.2f}%',
+                    }),
+                    use_container_width=True, hide_index=True,
+                )
+        else:
+            st.info("Portfolio history unavailable (new accounts may not have history yet).")
+    else:
+        st.info("Connect Alpaca to see daily P&L charts.")
+
+    # Manual refresh button
+    if st.button("🔄 Refresh Alpaca Data", key="rt_refresh"):
+        st.cache_data.clear()
+        st.rerun()
+
 
 # ============================================================================
 # FOOTER
