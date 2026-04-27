@@ -17,13 +17,48 @@ import plotly.express as px
 # ---------------------------------------------------------------------------
 # Alpaca helpers (lazy import — only loaded when the Trade Report page is used)
 # ---------------------------------------------------------------------------
+def _load_env_file():
+    """
+    Load KEY=VALUE pairs from .env file into os.environ.
+    Handles both bare KEY=VALUE (systemd style) and export KEY=VALUE (bash style).
+    Searched: working dir, script dir, /home/ubuntu/johntrading/.env
+    """
+    candidates = [
+        Path('.env'),
+        Path(__file__).parent / '.env',
+        Path('/home/ubuntu/johntrading/.env'),
+    ]
+    for env_path in candidates:
+        if env_path.exists():
+            try:
+                with open(env_path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith('#'):
+                            continue
+                        if line.startswith('export '):
+                            line = line[7:].strip()
+                        if '=' in line:
+                            k, _, v = line.partition('=')
+                            k = k.strip()
+                            v = v.strip().strip('"').strip("'")
+                            if k and not os.environ.get(k):
+                                os.environ[k] = v
+                return
+            except Exception:
+                pass
+
+
 def _get_alpaca_client():
-    """Return an (api_key, secret_key, TradingClient) tuple or None on failure."""
+    """Return a TradingClient or None on failure."""
+    # Ensure .env credentials are loaded into this process if not already present
+    if not os.getenv('APCA_API_KEY_ID'):
+        _load_env_file()
     try:
         from alpaca.trading.client import TradingClient
         api_key    = os.getenv('APCA_API_KEY_ID')
         secret_key = os.getenv('APCA_API_SECRET_KEY')
-        if not api_key or not secret_key:
+        if not api_key or not secret_key or api_key == 'your_api_key_here':
             return None
         base_url = os.getenv('APCA_API_BASE_URL', 'https://paper-api.alpaca.markets')
         client = TradingClient(api_key, secret_key, url_override=base_url)
