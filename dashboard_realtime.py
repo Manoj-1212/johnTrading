@@ -156,36 +156,42 @@ def _alpaca_filled_orders(days: int = 30):
 
 @st.cache_data(ttl=300)
 def _alpaca_portfolio_history(period: str = '1M'):
-    c = _alpaca_client()
-    if not c:
+    """
+    Fetches portfolio history directly via REST (alpaca-py 0.26.0 TradingClient
+    does not expose get_portfolio_history; we call the endpoint ourselves).
+    """
+    if not os.getenv('APCA_API_KEY_ID'):
+        _load_env_file()
+    key    = os.getenv('APCA_API_KEY_ID')
+    secret = os.getenv('APCA_API_SECRET_KEY')
+    base   = os.getenv('APCA_API_BASE_URL', 'https://paper-api.alpaca.markets')
+    if not key or not secret or key == 'your_api_key_here':
         return None, None
     try:
+        import requests
         import pytz
-        # Try with PortfolioHistoryTimeframe enum first, fall back to string
-        try:
-            from alpaca.trading.enums    import PortfolioHistoryTimeframe
-            from alpaca.trading.requests import GetPortfolioHistoryRequest
-            req  = GetPortfolioHistoryRequest(
-                period=period,
-                timeframe=PortfolioHistoryTimeframe.ONE_DAY,
-            )
-            hist = c.get_portfolio_history(filter=req)
-        except (ImportError, Exception):
-            # Fallback: call without request object (uses Alpaca defaults)
-            hist = c.get_portfolio_history()
-        if not hist or not hist.timestamp:
-            return None, 'No history data returned'
+        url = f"{base.rstrip('/')}/v2/account/portfolio/history"
+        params = {'period': period, 'timeframe': '1D', 'extended_hours': 'false'}
+        headers = {'APCA-API-KEY-ID': key, 'APCA-API-SECRET-KEY': secret}
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        timestamps   = data.get('timestamp', [])
+        equities     = data.get('equity', [])
+        profit_loss  = data.get('profit_loss', [])
+        pl_pct       = data.get('profit_loss_pct', [])
+        if not timestamps:
+            return None, 'No history data returned by Alpaca'
         rows = []
-        for ts, eq, pnl, pnl_pct in zip(hist.timestamp, hist.equity,
-                                         hist.profit_loss, hist.profit_loss_pct):
+        for ts, eq, pnl, pnl_p in zip(timestamps, equities, profit_loss, pl_pct):
             rows.append({
                 'Date':    datetime.fromtimestamp(ts, tz=pytz.UTC).strftime('%Y-%m-%d'),
-                'Equity':  float(eq      or 0),
-                'P&L ($)': float(pnl     or 0),
-                'P&L (%)': float(pnl_pct or 0) * 100,
+                'Equity':  float(eq    or 0),
+                'P&L ($)': float(pnl   or 0),
+                'P&L (%)': float(pnl_p or 0) * 100,
             })
         return pd.DataFrame(rows), None
-    except Exception as e:
+    except Exception:
         import traceback
         return None, traceback.format_exc()
 
